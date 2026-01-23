@@ -2,20 +2,20 @@
 
 Centralized eMoU Sheet Management and Governance System for Sri Sairam College of Engineering
 
-## 📋 Overview
+## Overview
 
 A secure, role-based web application to centrally manage Educational Memorandum of Understanding (eMoU) records. Built with Next.js and Firebase, it provides structured, auditable, and permission-controlled platform ensuring data integrity, traceability, and institutional compliance.
 
-## ✨ Key Features
+## Key Features
 
-### 🔐 Authentication & Authorization
+### Authentication & Authorization
 
 - Firebase Authentication with email/password
 - Role-based access control (Admin, Master User, HOD User)
 - Protected routes and session management
 - Secure logout functionality
 
-### 📊 eMoU Record Management
+### eMoU Record Management
 
 - **Auto-Generated IDs**: Format `YY+DEPT+SEQ` (e.g., `26CSE001`)
 - Create, read, update, delete operations
@@ -23,21 +23,21 @@ A secure, role-based web application to centrally manage Educational Memorandum 
 - Ownership tracking (created by, updated by, timestamps)
 - Permission-based editing
 
-### 👥 User Management (Admin Only)
+### User Management (Admin Only)
 
 - Create new users with role assignment
 - Assign departments to HOD users
 - Delete users
 - View all users with role badges
 
-### 🔍 Search & Filter
+### Search & Filter
 
 - Filter by department (CSE, ECE, MECH, CIVIL, EEE, IT, AIDS, CSBS)
 - Filter by status (Active, Expired, Renewal Pending, Draft)
 - Real-time search by company name, ID, or description
 - Live record count display
 
-### 📤 Data Operations
+### Data Operations
 
 - **Export**: CSV export with filtered data
 - **Import**: Excel (.xlsx) bulk import with validation
@@ -46,7 +46,7 @@ A secure, role-based web application to centrally manage Educational Memorandum 
   - Detailed error reporting by row
 - Google Drive links for document storage
 
-### 🎨 UI/UX
+### UI/UX
 
 - Clean spreadsheet-like layout (Excel/Sheets style)
 - Gabarito font throughout
@@ -54,14 +54,14 @@ A secure, role-based web application to centrally manage Educational Memorandum 
 - Responsive design for all devices
 - Compact, minimal design
 
-### 📈 Statistics Dashboard
+### Statistics Dashboard
 
 - Total eMoUs count
 - Active eMoUs
 - Expiring soon (within 30 days)
 - Expired eMoUs
 
-## 🏗️ Technology Stack
+## Technology Stack
 
 - **Frontend**: Next.js 16.1, React 19.2, TypeScript 5
 - **Styling**: Tailwind CSS 4
@@ -71,7 +71,7 @@ A secure, role-based web application to centrally manage Educational Memorandum 
 - **Package Manager**: pnpm
 - **Font**: Gabarito (Google Fonts)
 
-## 📦 Installation
+## Installation
 
 ### Prerequisites
 
@@ -99,7 +99,7 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000)
 
-## 🔧 Firebase Setup
+## Firebase Setup
 
 ### 1. Create Firebase Project
 
@@ -187,17 +187,17 @@ firebase deploy --only firestore:rules,storage:rules
 }
 ```
 
-## 👤 User Roles
+## User Roles
 
 | Role       | Create | Edit         | Delete | Manage Users | Department Access  |
 | ---------- | ------ | ------------ | ------ | ------------ | ------------------ |
 | **Admin**  | ✅ All | ✅ All       | ✅ All | ✅ Yes       | All Departments    |
 | **Master** | ✅ Yes | ✅ All Depts | ❌ No  | ❌ No        | All Departments    |
-| **HOD**    | ✅ Yes | ✅ Own Dept  | ❌ No  | ❌ No        | Assigned Dept Only |
+| **HOD**    | Yes    | Own Dept     | No     | No           | Assigned Dept Only |
 
-## 📝 eMoU Record Fields
+## eMoU Record Fields
 
-### Required Fields ✓
+### Required Fields
 
 - Department (CSE, ECE, MECH, CIVIL, EEE, IT, AIDS, CSBS)
 - Company Name
@@ -229,7 +229,7 @@ firebase deploy --only firestore:rules,storage:rules
 - Benefits Achieved So Far
 - Company Relationship (1-5 scale)
 
-## 🆔 Auto-Generated ID System
+## Auto-Generated ID System
 
 Format: **YY + DEPARTMENT + SEQUENCE**
 
@@ -248,13 +248,13 @@ Format: **YY + DEPARTMENT + SEQUENCE**
 
 ### Features
 
-- ✅ Unique per department per year
-- ✅ Automatically increments
-- ✅ Resets each new year
-- ✅ Cannot be manually edited
-- ✅ Department locked after creation
+- Unique per department per year
+- Automatically increments
+- Resets each new year
+- Cannot be manually edited
+- Department locked after creation
 
-## 📥 Excel Import Guide
+## Excel Import Guide
 
 ### Required Excel Columns
 
@@ -282,8 +282,8 @@ companyRelationship
 2. Select Excel file (.xlsx)
 3. Click **Validate File**
 4. Review validation results:
-   - ✅ Green: Valid records (will import)
-   - ⚠️ Orange: Invalid records (will skip)
+   - Green: Valid records (will import)
+   - Orange: Invalid records (will skip)
 5. Click **Import X Records**
 6. Records with missing required fields are automatically skipped
 
@@ -294,7 +294,7 @@ companyRelationship
 | CSE        | Tech Corp   | 01.01.2024 | 31.12.2024 | Active | Training    | Available            | Yes             |
 | AIDS       | AI Labs     | 15.02.2024 | 15.02.2025 | Draft  | Research    | Not Available        | No              |
 
-## 🗂️ Project Structure
+## Project Structure
 
 ```
 hmacs/
@@ -324,7 +324,7 @@ hmacs/
 └── README.md                     # This file
 ```
 
-## 🔒 Security Rules
+## Security Rules
 
 ### Firestore Rules
 
@@ -343,7 +343,7 @@ hmacs/
 // Storage not actively used
 ```
 
-## 📜 Available Scripts
+## Available Scripts
 
 ```bash
 pnpm dev              # Development server (localhost:3000)
@@ -352,7 +352,7 @@ pnpm start            # Start production server
 pnpm lint             # Run ESLint
 ```
 
-## 🚀 Deployment
+## Deployment
 
 ### Vercel (Recommended)
 
@@ -369,7 +369,7 @@ firebase init hosting
 firebase deploy --only hosting
 ```
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### "Permission denied" errors
 
@@ -396,7 +396,7 @@ pnpm install
 pnpm build
 ```
 
-## 🔍 Common Tasks
+## Common Tasks
 
 ### Add New Department
 
@@ -436,7 +436,7 @@ export type EMoUStatus =
 2. Update `components/EMoUForm.tsx` - Add form field
 3. Update `app/page.tsx` - Add to table display (optional)
 
-## 📊 Database Collections
+## Database Collections
 
 | Collection | Purpose       | Example Document                                   |
 | ---------- | ------------- | -------------------------------------------------- |
@@ -444,15 +444,15 @@ export type EMoUStatus =
 | `emous`    | eMoU records  | `{ id: "26CSE001", department, companyName, ... }` |
 | `counters` | ID generation | `{ "26_CSE": { count: 15, year: "26" } }`          |
 
-## 🎯 Quality Metrics
+## Quality Metrics
 
-- ✅ TypeScript: 0 errors
-- ✅ Build: Successful
-- ✅ ESLint: 0 errors
-- ✅ Type Coverage: 100%
-- ✅ Production Ready: Yes
+- TypeScript: 0 errors
+- Build: Successful
+- ESLint: 0 errors
+- Type Coverage: 100%
+- Production Ready: Yes
 
-## 📞 Support
+## Support
 
 For issues or questions:
 
@@ -461,11 +461,11 @@ For issues or questions:
 - Review Firestore security rules
 - Verify environment variables
 
-## 📄 License
+## License
 
 Developed for Sri Sairam College of Engineering for institutional use.
 
-## 👨‍💻 Development
+## Development
 
 ### Adding New Features
 
@@ -483,25 +483,25 @@ Developed for Sri Sairam College of Engineering for institutional use.
 - Proper error handling
 - Type safety enforced
 
-## 🎉 Features Summary
+## Features Summary
 
-✅ Authentication & Role-Based Access Control  
-✅ Auto-Generated Record IDs  
-✅ Complete eMoU Record Management (24+ fields)  
-✅ User Management Dashboard (Admin)  
-✅ Search, Filter, Export  
-✅ Excel Bulk Import with Validation  
-✅ Google Drive Document Links  
-✅ Ownership & Audit Trails  
-✅ Responsive Spreadsheet UI  
-✅ Light Theme  
-✅ Statistics Dashboard  
-✅ Production Ready
+- Authentication & Role-Based Access Control
+- Auto-Generated Record IDs
+- Complete eMoU Record Management (24+ fields)
+- User Management Dashboard (Admin)
+- Search, Filter, Export
+- Excel Bulk Import with Validation
+- Google Drive Document Links
+- Ownership & Audit Trails
+- Responsive Spreadsheet UI
+- Light Theme
+- Statistics Dashboard
+- Production Ready
 
 ---
 
 **Version**: 1.0.0  
-**Last Updated**: January 23, 2026  
-**Status**: Production Ready ✅
+**Last Updated**: January 24, 2026  
+**Status**: Production Ready
 
 **Developed for Sri Sairam College of Engineering**
