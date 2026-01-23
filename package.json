@@ -1,17 +1,23 @@
 {
-  "name": "hmacs",
-  "version": "0.1.0",
+  "name": "sairam-emou-vault",
+  "version": "1.0.0",
   "private": true,
+  "description": "Centralized eMoU Sheet Management and Governance System for Sri Sairam College",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "deploy:rules": "firebase deploy --only firestore:rules,storage:rules",
+    "deploy:hosting": "firebase deploy --only hosting"
   },
   "dependencies": {
+    "firebase": "^12.8.0",
     "next": "16.1.4",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "recharts": "^3.7.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

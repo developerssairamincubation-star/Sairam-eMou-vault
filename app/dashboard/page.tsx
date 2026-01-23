@@ -1,0 +1,757 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import { getEMoUs } from "@/lib/firestore";
+import { EMoURecord } from "@/types";
+import Link from "next/link";
+import {
+  LineChart,
+  Line,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  ComposedChart,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
+} from "recharts";
+
+interface DepartmentStats {
+  name: string;
+  count: number;
+  active: number;
+}
+
+export default function Dashboard() {
+  const [records, setRecords] = useState<EMoURecord[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadRecords();
+  }, []);
+
+  const loadRecords = async () => {
+    try {
+      const data = await getEMoUs();
+      setRecords(data);
+    } catch (error) {
+      console.error("Error loading records:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Calculate statistics
+  const stats = {
+    total: records.length,
+    active: records.filter((r) => r.status === "Active").length,
+    expired: records.filter((r) => r.status === "Expired").length,
+    renewal: records.filter((r) => r.status === "Renewal Pending").length,
+    draft: records.filter((r) => r.status === "Draft").length,
+    totalPlacement: records.reduce(
+      (sum, r) => sum + (r.placementOpportunity || 0),
+      0,
+    ),
+    totalInternship: records.reduce(
+      (sum, r) => sum + (r.internshipOpportunity || 0),
+      0,
+    ),
+    avgPerDept: "0",
+  };
+
+  // Department statistics
+  const departmentStats: DepartmentStats[] = (() => {
+    const deptMap = new Map<string, { count: number; active: number }>();
+    records.forEach((record) => {
+      const dept = record.department || "Uncategorized";
+      const current = deptMap.get(dept) || { count: 0, active: 0 };
+      current.count++;
+      if (record.status === "Active") current.active++;
+      deptMap.set(dept, current);
+    });
+    return Array.from(deptMap.entries())
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.count - a.count);
+  })();
+
+  if (departmentStats.length > 0) {
+    stats.avgPerDept = Math.round(
+      stats.total / departmentStats.length,
+    ).toString();
+  }
+
+  const topDepartments = departmentStats.slice(0, 10);
+
+  const getMonthlyTrends = () => {
+    const months = [];
+    const monthData: {
+      [key: string]: {
+        count: number;
+        active: number;
+        expired: number;
+        renewal: number;
+      };
+    } = {};
+
+    // Get last 12 months
+    for (let i = 11; i >= 0; i--) {
+      const date = new Date();
+      date.setMonth(date.getMonth() - i);
+      const monthKey = date.toLocaleString("default", { month: "short" });
+      months.push(monthKey);
+      monthData[monthKey] = { count: 0, active: 0, expired: 0, renewal: 0 };
+    }
+
+    // Count records per month with status breakdown
+    records.forEach((record) => {
+      if (record.createdAt) {
+        let createdDate: Date;
+        if (record.createdAt instanceof Date) {
+          createdDate = record.createdAt;
+        } else if (
+          typeof record.createdAt === "object" &&
+          "seconds" in record.createdAt
+        ) {
+          createdDate = new Date(
+            (record.createdAt as { seconds: number }).seconds * 1000,
+          );
+        } else {
+          return; // Skip invalid dates
+        }
+        const monthKey = createdDate.toLocaleString("default", {
+          month: "short",
+        });
+        if (monthData[monthKey] !== undefined) {
+          monthData[monthKey].count++;
+          if (record.status === "Active") monthData[monthKey].active++;
+          else if (record.status === "Expired") monthData[monthKey].expired++;
+          else if (record.status === "Renewal Pending")
+            monthData[monthKey].renewal++;
+        }
+      }
+    });
+
+    return months.map((month) => ({
+      month,
+      count: monthData[month].count,
+      active: monthData[month].active,
+      expired: monthData[month].expired,
+      renewal: monthData[month].renewal,
+    }));
+  };
+
+  const monthlyTrends = getMonthlyTrends();
+
+  // Status distribution for pie chart
+  const statusData = [
+    { name: "Active", value: stats.active, color: "#10b981" },
+    { name: "Expired", value: stats.expired, color: "#ef4444" },
+    { name: "Renewal", value: stats.renewal, color: "#f59e0b" },
+    { name: "Draft", value: stats.draft, color: "#6b7280" },
+  ].filter((d) => d.value > 0);
+
+  // Department performance radar data
+  const departmentRadarData = topDepartments.slice(0, 5).map((dept) => ({
+    department:
+      dept.name.length > 10 ? dept.name.substring(0, 10) + "..." : dept.name,
+    total: dept.count,
+    active: dept.active,
+    efficiency:
+      dept.count > 0 ? Math.round((dept.active / dept.count) * 100) : 0,
+  }));
+
+  if (loading) {
+    return (
+      <ProtectedRoute>
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading dashboard...</p>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  return (
+    <ProtectedRoute>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-3">
+      <div className="max-w-[1600px] mx-auto">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">
+              eMoU Analytics Dashboard
+            </h1>
+            <p className="text-xs text-gray-600 mt-0.5">
+              Real-time insights and comprehensive analytics
+            </p>
+          </div>
+          <Link
+            href="/"
+            className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
+          >
+            ← Back to Records
+          </Link>
+        </div>
+
+        {/* Main Grid - Ultra Dense 4 Row Layout */}
+        <div className="space-y-3">
+          {/* Row 1: 8 Compact Stats */}
+          <div className="grid grid-cols-8 gap-2">
+            <div className="bg-white rounded-lg p-3 border border-gray-200">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-blue-100 rounded flex items-center justify-center">
+                  <svg
+                    className="w-4 h-4 text-blue-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <div className="text-xl font-bold text-gray-800">
+                    {stats.total}
+                  </div>
+                  <div className="text-[10px] text-gray-600">Total</div>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg p-3 border border-gray-200">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-green-100 rounded flex items-center justify-center">
+                  <svg
+                    className="w-4 h-4 text-green-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <div className="text-xl font-bold text-green-600">
+                    {stats.active}
+                  </div>
+                  <div className="text-[10px] text-gray-600">Active</div>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg p-3 border border-gray-200">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-red-100 rounded flex items-center justify-center">
+                  <svg
+                    className="w-4 h-4 text-red-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <div className="text-xl font-bold text-red-600">
+                    {stats.expired}
+                  </div>
+                  <div className="text-[10px] text-gray-600">Expired</div>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg p-3 border border-gray-200">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-orange-100 rounded flex items-center justify-center">
+                  <svg
+                    className="w-4 h-4 text-orange-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <div className="text-xl font-bold text-orange-600">
+                    {stats.renewal}
+                  </div>
+                  <div className="text-[10px] text-gray-600">Renewal</div>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg p-3 border border-gray-200">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-purple-100 rounded flex items-center justify-center">
+                  <svg
+                    className="w-4 h-4 text-purple-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <div className="text-xl font-bold text-purple-600">
+                    {stats.totalPlacement}
+                  </div>
+                  <div className="text-[10px] text-gray-600">Placements</div>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg p-3 border border-gray-200">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-indigo-100 rounded flex items-center justify-center">
+                  <svg
+                    className="w-4 h-4 text-indigo-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <div className="text-xl font-bold text-indigo-600">
+                    {stats.totalInternship}
+                  </div>
+                  <div className="text-[10px] text-gray-600">Internships</div>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg p-3 border border-gray-200">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center">
+                  <svg
+                    className="w-4 h-4 text-gray-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <div className="text-xl font-bold text-gray-600">
+                    {stats.draft}
+                  </div>
+                  <div className="text-[10px] text-gray-600">Draft</div>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg p-3 border border-gray-200">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-amber-100 rounded flex items-center justify-center">
+                  <svg
+                    className="w-4 h-4 text-amber-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <div className="text-xl font-bold text-amber-600">
+                    {stats.avgPerDept}
+                  </div>
+                  <div className="text-[10px] text-gray-600">Avg/Dept</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Row 2: Multi-Line Chart + Pie Chart + Radar */}
+          <div className="grid grid-cols-12 gap-3">
+            {/* Multi-Line Trend Chart */}
+            <div className="col-span-5 bg-white rounded-lg p-3 border border-gray-200">
+              <h3 className="text-xs font-bold text-gray-700 mb-2 uppercase">
+                12-Month Trend Analysis
+              </h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={monthlyTrends}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fontSize: 10 }}
+                    stroke="#6b7280"
+                  />
+                  <YAxis tick={{ fontSize: 10 }} stroke="#6b7280" />
+                  <Tooltip
+                    contentStyle={{ fontSize: "12px", borderRadius: "8px" }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: "10px" }} />
+                  <Line
+                    type="monotone"
+                    dataKey="count"
+                    stroke="#3b82f6"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    name="Total"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="active"
+                    stroke="#10b981"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    name="Active"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="expired"
+                    stroke="#ef4444"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    name="Expired"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Status Distribution Pie */}
+            <div className="col-span-3 bg-white rounded-lg p-3 border border-gray-200">
+              <h3 className="text-xs font-bold text-gray-700 mb-2 uppercase">
+                Status Split
+              </h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={statusData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={40}
+                    outerRadius={70}
+                    paddingAngle={2}
+                    dataKey="value"
+                    label={({ name, percent }) =>
+                      `${name} ${((percent || 0) * 100).toFixed(0)}%`
+                    }
+                  >
+                    {statusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ fontSize: "12px", borderRadius: "8px" }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Department Performance Radar */}
+            <div className="col-span-4 bg-white rounded-lg p-3 border border-gray-200">
+              <h3 className="text-xs font-bold text-gray-700 mb-2 uppercase">
+                Department Performance
+              </h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <RadarChart data={departmentRadarData}>
+                  <PolarGrid stroke="#e5e7eb" />
+                  <PolarAngleAxis dataKey="department" tick={{ fontSize: 9 }} />
+                  <PolarRadiusAxis tick={{ fontSize: 9 }} />
+                  <Radar
+                    name="Total eMoUs"
+                    dataKey="total"
+                    stroke="#3b82f6"
+                    fill="#3b82f6"
+                    fillOpacity={0.3}
+                  />
+                  <Radar
+                    name="Active"
+                    dataKey="active"
+                    stroke="#10b981"
+                    fill="#10b981"
+                    fillOpacity={0.3}
+                  />
+                  <Tooltip
+                    contentStyle={{ fontSize: "12px", borderRadius: "8px" }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: "10px" }} />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Row 3: Area Chart + Composed Bar Chart */}
+          <div className="grid grid-cols-12 gap-3">
+            {/* Area Chart - Cumulative Growth */}
+            <div className="col-span-6 bg-white rounded-lg p-3 border border-gray-200">
+              <h3 className="text-xs font-bold text-gray-700 mb-2 uppercase">
+                Monthly Breakdown (Area)
+              </h3>
+              <ResponsiveContainer width="100%" height={180}>
+                <AreaChart data={monthlyTrends}>
+                  <defs>
+                    <linearGradient
+                      id="colorActive"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
+                      <stop
+                        offset="95%"
+                        stopColor="#10b981"
+                        stopOpacity={0.1}
+                      />
+                    </linearGradient>
+                    <linearGradient
+                      id="colorExpired"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8} />
+                      <stop
+                        offset="95%"
+                        stopColor="#ef4444"
+                        stopOpacity={0.1}
+                      />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fontSize: 10 }}
+                    stroke="#6b7280"
+                  />
+                  <YAxis tick={{ fontSize: 10 }} stroke="#6b7280" />
+                  <Tooltip
+                    contentStyle={{ fontSize: "12px", borderRadius: "8px" }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: "10px" }} />
+                  <Area
+                    type="monotone"
+                    dataKey="active"
+                    stroke="#10b981"
+                    fillOpacity={1}
+                    fill="url(#colorActive)"
+                    name="Active"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="expired"
+                    stroke="#ef4444"
+                    fillOpacity={1}
+                    fill="url(#colorExpired)"
+                    name="Expired"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Stacked Bar Chart */}
+            <div className="col-span-6 bg-white rounded-lg p-3 border border-gray-200">
+              <h3 className="text-xs font-bold text-gray-700 mb-2 uppercase">
+                Monthly Status Composition
+              </h3>
+              <ResponsiveContainer width="100%" height={180}>
+                <ComposedChart data={monthlyTrends}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fontSize: 10 }}
+                    stroke="#6b7280"
+                  />
+                  <YAxis tick={{ fontSize: 10 }} stroke="#6b7280" />
+                  <Tooltip
+                    contentStyle={{ fontSize: "12px", borderRadius: "8px" }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: "10px" }} />
+                  <Bar
+                    dataKey="active"
+                    stackId="a"
+                    fill="#10b981"
+                    name="Active"
+                  />
+                  <Bar
+                    dataKey="renewal"
+                    stackId="a"
+                    fill="#f59e0b"
+                    name="Renewal"
+                  />
+                  <Bar
+                    dataKey="expired"
+                    stackId="a"
+                    fill="#ef4444"
+                    name="Expired"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="count"
+                    stroke="#3b82f6"
+                    strokeWidth={2}
+                    name="Total"
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Row 4: Department Rankings + Top Performers */}
+          <div className="grid grid-cols-12 gap-3">
+            <div className="col-span-6 bg-white rounded-lg p-3 border border-gray-200">
+              <h3 className="text-xs font-bold text-gray-700 mb-2 uppercase">
+                Top 8 Departments
+              </h3>
+              <ResponsiveContainer width="100%" height={160}>
+                <BarChart data={topDepartments.slice(0, 8)} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    type="number"
+                    tick={{ fontSize: 10 }}
+                    stroke="#6b7280"
+                  />
+                  <YAxis
+                    dataKey="name"
+                    type="category"
+                    tick={{ fontSize: 9 }}
+                    width={100}
+                    stroke="#6b7280"
+                  />
+                  <Tooltip
+                    contentStyle={{ fontSize: "12px", borderRadius: "8px" }}
+                  />
+                  <Bar dataKey="count" fill="#3b82f6" name="Total eMoUs" />
+                  <Bar dataKey="active" fill="#10b981" name="Active" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="col-span-6 bg-white rounded-lg p-3 border border-gray-200">
+              <h3 className="text-xs font-bold text-gray-700 mb-2 uppercase">
+                Performance Insights
+              </h3>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded p-2 border border-blue-200">
+                  <div className="text-2xl font-bold text-blue-700">
+                    {departmentStats.filter((d) => d.count > 0).length}
+                  </div>
+                  <div className="text-[10px] text-blue-600 font-medium">
+                    Active Depts
+                  </div>
+                </div>
+                <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded p-2 border border-emerald-200">
+                  <div className="text-2xl font-bold text-emerald-700">
+                    {stats.total > 0
+                      ? Math.round((stats.active / stats.total) * 100)
+                      : 0}
+                    %
+                  </div>
+                  <div className="text-[10px] text-emerald-600 font-medium">
+                    Success Rate
+                  </div>
+                </div>
+                <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded p-2 border border-purple-200">
+                  <div className="text-2xl font-bold text-purple-700">
+                    {topDepartments.length > 0
+                      ? topDepartments[0].name.substring(0, 8)
+                      : "N/A"}
+                  </div>
+                  <div className="text-[10px] text-purple-600 font-medium">
+                    Top Dept
+                  </div>
+                </div>
+                <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded p-2 border border-orange-200">
+                  <div className="text-2xl font-bold text-orange-700">
+                    {stats.renewal + stats.expired}
+                  </div>
+                  <div className="text-[10px] text-orange-600 font-medium">
+                    Need Action
+                  </div>
+                </div>
+                <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded p-2 border border-indigo-200">
+                  <div className="text-2xl font-bold text-indigo-700">
+                    {stats.totalPlacement + stats.totalInternship}
+                  </div>
+                  <div className="text-[10px] text-indigo-600 font-medium">
+                    Opportunities
+                  </div>
+                </div>
+                <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded p-2 border border-gray-200">
+                  <div className="text-2xl font-bold text-gray-700">
+                    {stats.avgPerDept}
+                  </div>
+                  <div className="text-[10px] text-gray-600 font-medium">
+                    Avg eMoUs
+                  </div>
+                </div>
+              </div>
+              <div className="mt-3 space-y-1">
+                {topDepartments.slice(0, 3).map((dept, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between text-[10px] bg-gray-50 rounded px-2 py-1"
+                  >
+                    <span className="font-medium text-gray-700">
+                      #{idx + 1} {dept.name}
+                    </span>
+                    <span className="text-gray-600">
+                      {dept.active}/{dept.count}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </div>
+    </ProtectedRoute>
+  );
+}

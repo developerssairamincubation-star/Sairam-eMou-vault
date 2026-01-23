@@ -1,0 +1,12 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // NOTE: This application uses Google Drive links for document storage
+    // Firebase Storage is not currently used, but rules are included for future use
+    // All file management should be done through Google Drive
+    
+    match /{allPaths=**} {
+      allow read, write: if false; // Storage not in use
+    }
+  }
+}
