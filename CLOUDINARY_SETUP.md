@@ -52,7 +52,7 @@ pnpm dev
 
 1. Go to the eMoU form (click "+ New Record")
 2. Scroll down to "Document Information" section
-3. Try uploading a PDF or image file in the "HOD Approval Document" field
+3. Try uploading a PDF or image file in the "HO Approval Document" field
 4. If successful, you should see "File uploaded successfully!" and a "View Uploaded Document" link
 
 ## Troubleshooting

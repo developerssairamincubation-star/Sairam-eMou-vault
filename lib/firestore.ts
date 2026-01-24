@@ -20,17 +20,36 @@ const EMOU_COLLECTION = 'emous';
 const USERS_COLLECTION = 'users';
 const COUNTERS_COLLECTION = 'counters';
 
+// Helper function to remove undefined values from objects
+function removeUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  const cleaned: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      cleaned[key] = value;
+    }
+  }
+  return cleaned as Partial<T>;
+}
+
 // Get short department code for ID generation (2 characters)
 function getShortDeptCode(department: DepartmentCode): string {
   const deptCodeMap: Record<DepartmentCode, string> = {
     'CSE': 'CS',
     'ECE': 'EC',
     'MECH': 'ME',
-    'CIVIL': 'CI',
+    'CIVIL': 'CE',
     'EEE': 'EE',
     'IT': 'IT',
-    'AIDS': 'AI',
+    'AIDS': 'AD',
     'CSBS': 'CB',
+    'E&I': 'EI',
+    'MECHATRONICS': 'MZ',
+    'CCE': 'CO',
+    'AIML': 'AM',
+    'CYBERSECURITY': 'SC',
+    'IOT': 'CI',
+    'EICE': 'IX',
+    'CSE MTECH' : 'CJ',
   };
   return deptCodeMap[department] || department.slice(0, 2);
 }
@@ -66,7 +85,7 @@ export async function generateEMoUId(department: DepartmentCode, fromDate?: stri
   await setDoc(counterRef, { count: nextNumber, year, department: deptCode });
   
   const sequentialNumber = nextNumber.toString().padStart(3, '0');
-  return `${year}${deptCode}${sequentialNumber}`;
+  return `${year}SEC${deptCode}${sequentialNumber}`;
 }
 
 // eMoU CRUD Operations
@@ -79,7 +98,10 @@ export async function createEMoU(data: Omit<EMoURecord, 'id'>): Promise<string> 
     updatedAt: data.updatedAt ? Timestamp.fromDate(data.updatedAt) : null,
   };
   
-  await setDoc(doc(db, EMOU_COLLECTION, id), emouData);
+  // Remove undefined values before saving to Firestore
+  const cleanedData = removeUndefined(emouData);
+  
+  await setDoc(doc(db, EMOU_COLLECTION, id), cleanedData);
   return id;
 }
 
@@ -107,7 +129,10 @@ export async function updateEMoU(id: string, data: Partial<EMoURecord>): Promise
     updateData.updatedAt = Timestamp.fromDate(data.updatedAt);
   }
   
-  await updateDoc(docRef, updateData);
+  // Remove undefined values before updating Firestore
+  const cleanedData = removeUndefined(updateData);
+  
+  await updateDoc(docRef, cleanedData);
 }
 
 export async function deleteEMoU(id: string): Promise<void> {

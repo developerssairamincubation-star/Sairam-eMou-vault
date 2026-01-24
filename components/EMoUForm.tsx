@@ -26,6 +26,14 @@ const DEPARTMENTS: DepartmentCode[] = [
   "IT",
   "AIDS",
   "CSBS",
+  "E&I",
+  "MECHATRONICS",
+  "CCE",
+  "AIML",
+  "CYBERSECURITY",
+  "IOT",
+  "EICE",
+  "CSE MTECH",
 ];
 const STATUSES: EMoUStatus[] = [
   "Active",
@@ -33,6 +41,29 @@ const STATUSES: EMoUStatus[] = [
   "Renewal Pending",
   "Draft",
 ];
+
+// Get short department code for ID preview (2 characters)
+const getShortDeptCode = (department: DepartmentCode): string => {
+  const deptCodeMap: Record<DepartmentCode, string> = {
+    'CSE': 'CS',
+    'ECE': 'EC',
+    'MECH': 'ME',
+    'CIVIL': 'CE',
+    'EEE': 'EE',
+    'IT': 'IT',
+    'AIDS': 'AD',
+    'CSBS': 'CB',
+    'E&I': 'EI',
+    'MECHATRONICS': 'MZ',
+    'CCE': 'CO',
+    'AIML': 'AM',
+    'CYBERSECURITY': 'SC',
+    'IOT': 'CI',
+    'EICE': 'IX',
+    'CSE MTECH' : 'CJ',
+  };
+  return deptCodeMap[department] || department.slice(0, 2);
+};
 
 export default function EMoUForm({
   initialData,
@@ -250,8 +281,7 @@ export default function EMoUForm({
             {!initialData && (
               <p className="text-xs text-[#6b7280] mt-1">
                 ID will be auto-generated as:{" "}
-                {new Date().getFullYear().toString().slice(-2)}
-                {formData.department}001
+                {new Date().getFullYear().toString().slice(-2)}SEC{getShortDeptCode(formData.department)}001
               </p>
             )}
           </div>
@@ -749,7 +779,7 @@ export default function EMoUForm({
           </div>
           <div className="col-span-2">
             <label className="block text-xs font-medium text-[#4b5563] mb-1">
-              HOD Approval Document
+              HO Approval Document
             </label>
             <div className="space-y-2">
               <input

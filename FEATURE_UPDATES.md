@@ -11,7 +11,7 @@
 - **Location**: Basic Information section of the form
 
 #### Document Uploads
-- **HOD Approval Document**: Upload field for HOD approval documents
+- **HO Approval Document**: Upload field for HO approval documents
 - **Signed Agreement Document**: Upload field for signed MoU agreements
 - **Format**: Cloudinary-hosted files (PDF, JPG, JPEG, PNG)
 - **Size Limit**: 10MB per file
@@ -33,7 +33,7 @@
 
 #### Main Table (app/page.tsx)
 - Added "Scope" column in table header
-- Added "HOD Approval" column with clickable viewer
+- Added "HO Approval" column with clickable viewer
 - Added "Signed Agreement" column with clickable viewer
 - Added scope field to inline record creation
 - Updated `saveNewRecord` function to include new fields
@@ -81,14 +81,14 @@
 2. Fill in basic information
 3. Select **Scope**: National or International
 4. Scroll to "Document Information" section
-5. Click "Choose File" for HOD Approval Document
+5. Click "Choose File" for HO Approval Document
 6. Upload PDF or image file (max 10MB)
 7. Repeat for Signed Agreement Document
 8. Save the record
 
 #### Viewing Documents
 1. In the main table, find the record
-2. Click "View" in HOD Approval or Signed Agreement column
+2. Click "View" in HO Approval or Signed Agreement column
 3. Document opens in a popup viewer
 4. Use "Open in New Tab" for full-screen view
 5. Click "✕ Close" to close the viewer
@@ -169,7 +169,7 @@ See CLOUDINARY_SETUP.md for detailed instructions.
 
 - [ ] Create new record with National scope
 - [ ] Create new record with International scope
-- [ ] Upload PDF for HOD Approval
+- [ ] Upload PDF for HO Approval
 - [ ] Upload image for Signed Agreement
 - [ ] View uploaded documents in popup
 - [ ] Remove uploaded document

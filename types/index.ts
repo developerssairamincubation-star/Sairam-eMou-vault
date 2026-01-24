@@ -13,7 +13,7 @@ export interface User {
 }
 
 // Department codes
-export type DepartmentCode = 'CSE' | 'ECE' | 'MECH' | 'CIVIL' | 'EEE' | 'IT' | 'AIDS' | 'CSBS';
+export type DepartmentCode = 'CSE' | 'ECE' | 'MECH' | 'CIVIL' | 'EEE' | 'IT' | 'AIDS' | 'CSBS' | 'E&I' | 'MECHATRONICS' | 'CCE' | 'AIML' | 'CYBERSECURITY' | 'IOT' | 'EICE' | 'CSE MTECH';
 
 // eMoU Status
 export type EMoUStatus = 'Active' | 'Expired' | 'Renewal Pending' | 'Draft';
@@ -40,7 +40,7 @@ export interface EMoURecord {
   scope: ScopeType; // National or International
   maintainedBy: MaintainedBy; // Institution, Incubation, or Departments
   approvalStatus: 'draft' | 'pending' | 'approved' | 'rejected'; // Approval workflow status
-  hodApprovalDoc?: string; // Cloudinary link to HOD approval document
+  hodApprovalDoc?: string; // Cloudinary link to HO approval document
   signedAgreementDoc?: string; // Cloudinary link to signed agreement document
   description: string;
   companyWebsite?: string;

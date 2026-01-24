@@ -602,7 +602,7 @@ function AdminPage() {
                         <th style={{ width: "120px" }}>Department</th>
                         <th style={{ width: "130px" }}>Maintained By</th>
                         <th style={{ width: "120px" }}>From Date</th>
-                        <th style={{ width: "150px" }}>HOD Approval</th>
+                        <th style={{ width: "150px" }}>HO Approval</th>
                         <th style={{ width: "150px" }}>Signed Agreement</th>
                         <th style={{ width: "200px" }}>Actions</th>
                       </tr>
@@ -610,7 +610,7 @@ function AdminPage() {
                     <tbody>
                       {pendingRecords.map((record) => (
                         <tr key={record.id}>
-                          <td className="font-mono text-xs">{record.emouId}</td>
+                          <td className="font-mono text-xs">{record.id}</td>
                           <td className="font-medium">{record.companyName}</td>
                           <td>{record.department}</td>
                           <td>{record.maintainedBy}</td>
@@ -620,7 +620,7 @@ function AdminPage() {
                               <button
                                 onClick={() => setViewingDocument({
                                   url: record.hodApprovalDoc!,
-                                  title: `HOD Approval - ${record.companyName}`
+                                  title: `HO Approval - ${record.companyName}`
                                 })}
                                 className="text-xs text-blue-600 hover:text-blue-800 underline"
                               >
@@ -695,14 +695,14 @@ function AdminPage() {
                         <th style={{ width: "120px" }}>Department</th>
                         <th style={{ width: "130px" }}>Maintained By</th>
                         <th style={{ width: "120px" }}>From Date</th>
-                        <th style={{ width: "150px" }}>HOD Approval</th>
+                        <th style={{ width: "150px" }}>HO Approval</th>
                         <th style={{ width: "150px" }}>Signed Agreement</th>
                       </tr>
                     </thead>
                     <tbody>
                       {draftRecords.map((record) => (
                         <tr key={record.id}>
-                          <td className="font-mono text-xs">{record.emouId}</td>
+                          <td className="font-mono text-xs">{record.id}</td>
                           <td className="font-medium">{record.companyName}</td>
                           <td>{record.department}</td>
                           <td>{record.maintainedBy}</td>
@@ -712,7 +712,7 @@ function AdminPage() {
                               <button
                                 onClick={() => setViewingDocument({
                                   url: record.hodApprovalDoc!,
-                                  title: `HOD Approval - ${record.companyName}`
+                                  title: `HO Approval - ${record.companyName}`
                                 })}
                                 className="text-xs text-blue-600 hover:text-blue-800 underline"
                               >

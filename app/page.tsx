@@ -624,7 +624,7 @@ function HomePage() {
                   onClick={() => setShowForm(true)}
                   className="btn btn-primary"
                 >
-                  + New Record
+                  + New MOU
                 </button>
                 <button onClick={signOut} className="btn btn-secondary">
                   Logout
@@ -734,7 +734,7 @@ function HomePage() {
                       <th style={{ width: "80px" }}>Renewal</th>
                       <th style={{ minWidth: "200px" }}>Benefits Achieved</th>
                       <th style={{ width: "150px" }}>Doc Availability</th>
-                      <th style={{ width: "180px" }}>HOD Approval</th>
+                      <th style={{ width: "180px" }}>HO Approval</th>
                       <th style={{ width: "180px" }}>Signed Agreement</th>
                       <th style={{ width: "120px" }}>Created By</th>
                       <th style={{ width: "100px" }}>Actions</th>
@@ -1047,7 +1047,7 @@ function HomePage() {
                           <td className="text-xs text-center">
                             {record.hodApprovalDoc ? (
                               <button
-                                onClick={() => setViewingDocument({ url: record.hodApprovalDoc!, title: `HOD Approval - ${record.companyName}` })}
+                                onClick={() => setViewingDocument({ url: record.hodApprovalDoc!, title: `HO Approval - ${record.companyName}` })}
                                 className="text-blue-600 hover:underline cursor-pointer"
                               >
                                 View
