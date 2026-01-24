@@ -32,7 +32,13 @@ export default function ImportDialog({ onImport, onClose }: ImportDialogProps) {
 
   const requiredFields = [
     "companyName",
+    "fromDate",
+    "toDate",
+    "status",
+    "description",
     "department",
+    "documentAvailability",
+    "goingForRenewal",
   ];
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -41,152 +47,6 @@ export default function ImportDialog({ onImport, onClose }: ImportDialogProps) {
       setFile(selectedFile);
       setValidationResult(null);
     }
-  };
-
-  // Intelligent date parser supporting multiple formats
-  const parseDate = (dateValue: unknown): string => {
-    if (!dateValue) return "";
-    
-    const dateStr = String(dateValue).trim();
-    if (!dateStr) return "";
-
-    // Try parsing as Excel serial date
-    if (!isNaN(Number(dateStr)) && Number(dateStr) > 1000) {
-      const excelEpoch = new Date(1899, 11, 30);
-      const date = new Date(excelEpoch.getTime() + Number(dateStr) * 86400000);
-      const day = String(date.getDate()).padStart(2, '0');
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const year = date.getFullYear();
-      return `${day}.${month}.${year}`;
-    }
-
-    // Common date separators: ., /, -
-    const patterns = [
-      /^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})$/, // DD.MM.YYYY or DD/MM/YY
-      /^(\d{4})[.\/-](\d{1,2})[.\/-](\d{1,2})$/, // YYYY-MM-DD
-      /^(\d{1,2})\s+([a-zA-Z]+)\s+(\d{2,4})$/, // DD Month YYYY
-    ];
-
-    for (const pattern of patterns) {
-      const match = dateStr.match(pattern);
-      if (match) {
-        let day: string, month: string, year: string;
-        
-        if (pattern === patterns[1]) { // YYYY-MM-DD
-          [, year, month, day] = match;
-        } else if (pattern === patterns[2]) { // DD Month YYYY
-          [, day, month, year] = match;
-          const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-          const monthIndex = monthNames.findIndex(m => month.toLowerCase().startsWith(m));
-          month = String(monthIndex + 1).padStart(2, '0');
-        } else { // DD.MM.YYYY or DD/MM/YY
-          [, day, month, year] = match;
-        }
-
-        // Handle 2-digit years
-        if (year.length === 2) {
-          year = Number(year) > 50 ? `19${year}` : `20${year}`;
-        }
-
-        // Normalize
-        day = String(day).padStart(2, '0');
-        month = String(month).padStart(2, '0');
-        
-        return `${day}.${month}.${year}`;
-      }
-    }
-
-    // Try native Date parsing as last resort
-    try {
-      const date = new Date(dateStr);
-      if (!isNaN(date.getTime())) {
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const year = date.getFullYear();
-        return `${day}.${month}.${year}`;
-      }
-    } catch (e) {
-      // Ignore
-    }
-
-    return dateStr; // Return as-is if can't parse
-  };
-
-  // Normalize status values (case-insensitive) or auto-determine from dates
-  const normalizeStatus = (status: unknown, toDateStr?: string): EMoUStatus => {
-    const statusStr = String(status || "").trim().toLowerCase();
-    
-    // If status is provided, use it
-    if (statusStr) {
-      if (statusStr.includes("active")) return "Active";
-      if (statusStr.includes("expire")) return "Expired";
-      if (statusStr.includes("renew")) return "Renewal Pending";
-      if (statusStr.includes("draft")) return "Draft";
-    }
-    
-    // If status is empty, auto-determine from toDate
-    if (toDateStr) {
-      try {
-        const parts = toDateStr.split('.');
-        if (parts.length === 3) {
-          const day = parseInt(parts[0]);
-          const month = parseInt(parts[1]) - 1; // JavaScript months are 0-indexed
-          const year = parseInt(parts[2]);
-          const toDate = new Date(year, month, day);
-          const today = new Date();
-          today.setHours(0, 0, 0, 0); // Reset time for date-only comparison
-          
-          if (toDate >= today) {
-            return "Active";
-          } else {
-            return "Expired";
-          }
-        }
-      } catch (e) {
-        // If date parsing fails, default to Draft
-      }
-    }
-    
-    return "Draft"; // Default
-  };
-
-  // Normalize department codes
-  const normalizeDepartment = (dept: unknown): DepartmentCode => {
-    const deptStr = String(dept || "").trim().toUpperCase();
-    const deptMapping: Record<string, DepartmentCode> = {
-      "CSE": "CSE", "COMPUTER": "CSE", "CS": "CSE",
-      "ECE": "ECE", "ELECTRONICS": "ECE", "EC": "ECE",
-      "EEE": "EEE", "ELECTRICAL": "EEE", "EE": "EEE",
-      "MECH": "MECH", "MECHANICAL": "MECH", "ME": "MECH",
-      "CIVIL": "CIVIL", "CE": "CIVIL",
-      "IT": "IT", "INFORMATION": "IT",
-      "AIDS": "AIDS", "AI&DS": "AIDS", "AI": "AIDS",
-      "CSBS": "CSBS",
-    };
-    
-    // Try exact match first
-    if (deptMapping[deptStr]) return deptMapping[deptStr];
-    
-    // Try partial match
-    for (const [key, value] of Object.entries(deptMapping)) {
-      if (deptStr.includes(key)) return value;
-    }
-    
-    return "CSE"; // Default
-  };
-
-  // Normalize document availability
-  const normalizeDocAvailability = (doc: unknown): DocumentAvailability => {
-    const docStr = String(doc || "").trim().toLowerCase();
-    if (docStr.includes("available") || docStr.includes("yes") || docStr.includes("soft") || docStr.includes("hard")) return "Available";
-    return "Not Available"; // Default
-  };
-
-  // Normalize yes/no fields
-  const normalizeYesNo = (value: unknown): "Yes" | "No" => {
-    const valStr = String(value || "").trim().toLowerCase();
-    if (valStr.includes("yes") || valStr === "y" || valStr === "1" || valStr === "true") return "Yes";
-    return "No";
   };
 
   const parseExcelFile = async () => {
@@ -217,7 +77,7 @@ export default function ImportDialog({ onImport, onClose }: ImportDialogProps) {
       const record = row as Record<string, unknown>;
       const missingFields: string[] = [];
 
-      // Check ONLY essential required fields (companyName and department)
+      // Check required fields
       requiredFields.forEach((field) => {
         if (!record[field] || String(record[field]).trim() === "") {
           missingFields.push(field);
@@ -231,76 +91,71 @@ export default function ImportDialog({ onImport, onClose }: ImportDialogProps) {
           missingFields,
         });
       } else {
-        // Map Excel columns to EMoURecord fields with intelligent parsing
-        const fromDate = parseDate(record.fromDate) || "";
-        const toDate = parseDate(record.toDate) || "";
-        
+        // Map Excel columns to EMoURecord fields
         const emouRecord: Partial<EMoURecord> = {
-          department: normalizeDepartment(record.department),
-          companyName: String(record.companyName || "").trim(),
-          fromDate: fromDate,
-          toDate: toDate,
-          status: normalizeStatus(record.status, toDate),
-          description: String(record.description || "").trim(),
-          documentAvailability: normalizeDocAvailability(record.documentAvailability),
-          goingForRenewal: normalizeYesNo(record.goingForRenewal),
-          perStudentCost: record.perStudentCost && !isNaN(Number(record.perStudentCost))
+          department: (record.department as DepartmentCode) || "CSE",
+          companyName: String(record.companyName || ""),
+          fromDate: String(record.fromDate || ""),
+          toDate: String(record.toDate || ""),
+          status: (record.status as EMoUStatus) || "Draft",
+          description: String(record.description || ""),
+          documentAvailability:
+            (record.documentAvailability as DocumentAvailability) ||
+            "Not Available",
+          goingForRenewal: (record.goingForRenewal as "Yes" | "No") || "No",
+          scannedCopy: record.scannedCopy
+            ? String(record.scannedCopy)
+            : undefined,
+          companyWebsite: record.companyWebsite
+            ? String(record.companyWebsite)
+            : undefined,
+          aboutCompany: record.aboutCompany
+            ? String(record.aboutCompany)
+            : undefined,
+          companyAddress: record.companyAddress
+            ? String(record.companyAddress)
+            : undefined,
+          industryContactName: record.industryContactName
+            ? String(record.industryContactName)
+            : undefined,
+          industryContactMobile: record.industryContactMobile
+            ? String(record.industryContactMobile)
+            : undefined,
+          industryContactEmail: record.industryContactEmail
+            ? String(record.industryContactEmail)
+            : undefined,
+          institutionContactName: record.institutionContactName
+            ? String(record.institutionContactName)
+            : undefined,
+          institutionContactMobile: record.institutionContactMobile
+            ? String(record.institutionContactMobile)
+            : undefined,
+          institutionContactEmail: record.institutionContactEmail
+            ? String(record.institutionContactEmail)
+            : undefined,
+          clubsAligned: record.clubsAligned
+            ? String(record.clubsAligned)
+            : undefined,
+          sdgGoals: record.sdgGoals ? String(record.sdgGoals) : undefined,
+          skillsTechnologies: record.skillsTechnologies
+            ? String(record.skillsTechnologies)
+            : undefined,
+          perStudentCost: record.perStudentCost
             ? Number(record.perStudentCost)
             : 0,
-          placementOpportunity: record.placementOpportunity && !isNaN(Number(record.placementOpportunity))
+          placementOpportunity: record.placementOpportunity
             ? Number(record.placementOpportunity)
             : 0,
-          internshipOpportunity: record.internshipOpportunity && !isNaN(Number(record.internshipOpportunity))
+          internshipOpportunity: record.internshipOpportunity
             ? Number(record.internshipOpportunity)
             : 0,
-          companyRelationship: record.companyRelationship && !isNaN(Number(record.companyRelationship))
-            ? Math.max(1, Math.min(5, Number(record.companyRelationship))) as 1 | 2 | 3 | 4 | 5
+          benefitsAchieved: record.benefitsAchieved
+            ? String(record.benefitsAchieved)
+            : undefined,
+          companyRelationship: record.companyRelationship
+            ? (Number(record.companyRelationship) as 1 | 2 | 3 | 4 | 5)
             : 3,
         };
-
-        // Only add optional fields if they have values (avoid undefined)
-        if (record.scannedCopy && String(record.scannedCopy).trim()) {
-          emouRecord.scannedCopy = String(record.scannedCopy).trim();
-        }
-        if (record.companyWebsite && String(record.companyWebsite).trim()) {
-          emouRecord.companyWebsite = String(record.companyWebsite).trim();
-        }
-        if (record.aboutCompany && String(record.aboutCompany).trim()) {
-          emouRecord.aboutCompany = String(record.aboutCompany).trim();
-        }
-        if (record.companyAddress && String(record.companyAddress).trim()) {
-          emouRecord.companyAddress = String(record.companyAddress).trim();
-        }
-        if (record.industryContactName && String(record.industryContactName).trim()) {
-          emouRecord.industryContactName = String(record.industryContactName).trim();
-        }
-        if (record.industryContactMobile && String(record.industryContactMobile).trim()) {
-          emouRecord.industryContactMobile = String(record.industryContactMobile).trim();
-        }
-        if (record.industryContactEmail && String(record.industryContactEmail).trim()) {
-          emouRecord.industryContactEmail = String(record.industryContactEmail).trim();
-        }
-        if (record.institutionContactName && String(record.institutionContactName).trim()) {
-          emouRecord.institutionContactName = String(record.institutionContactName).trim();
-        }
-        if (record.institutionContactMobile && String(record.institutionContactMobile).trim()) {
-          emouRecord.institutionContactMobile = String(record.institutionContactMobile).trim();
-        }
-        if (record.institutionContactEmail && String(record.institutionContactEmail).trim()) {
-          emouRecord.institutionContactEmail = String(record.institutionContactEmail).trim();
-        }
-        if (record.clubsAligned && String(record.clubsAligned).trim()) {
-          emouRecord.clubsAligned = String(record.clubsAligned).trim();
-        }
-        if (record.sdgGoals && String(record.sdgGoals).trim()) {
-          emouRecord.sdgGoals = String(record.sdgGoals).trim();
-        }
-        if (record.skillsTechnologies && String(record.skillsTechnologies).trim()) {
-          emouRecord.skillsTechnologies = String(record.skillsTechnologies).trim();
-        }
-        if (record.benefitsAchieved && String(record.benefitsAchieved).trim()) {
-          emouRecord.benefitsAchieved = String(record.benefitsAchieved).trim();
-        }
 
         valid.push(emouRecord);
       }
@@ -364,16 +219,6 @@ export default function ImportDialog({ onImport, onClose }: ImportDialogProps) {
               {requiredFields.map((field) => (
                 <div key={field}>• {field}</div>
               ))}
-            </div>
-            <div className="mt-3 text-xs text-[#4b5563]">
-              <strong>Smart Import Features:</strong>
-              <ul className="list-disc list-inside mt-1 space-y-1">
-                <li>Accepts dates in any format (12.02.2021, 23/3/22, 2021-03-15)</li>
-                <li>Auto-determines status from toDate if status field is empty</li>
-                <li>Case-insensitive status (EXPIRED, Expired, expired)</li>
-                <li>Auto-detects departments (CSE, Computer, CS → CSE)</li>
-                <li>Missing fields are filled with defaults</li>
-              </ul>
             </div>
           </div>
 

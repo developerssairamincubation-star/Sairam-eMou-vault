@@ -36,14 +36,6 @@ function HomePage() {
   const [viewingRecord, setViewingRecord] = useState<EMoURecord | null>(null);
   const [inlineEditingId, setInlineEditingId] = useState<string | null>(null);
   const [inlineEditData, setInlineEditData] = useState<Partial<EMoURecord>>({});
-  const [editingCell, setEditingCell] = useState<{ recordId: string; field: string } | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [scrollStart, setScrollStart] = useState({ left: 0, top: 0 });
-  const [showAddButton, setShowAddButton] = useState(false);
-  const [creatingNewRecord, setCreatingNewRecord] = useState(false);
-  const [newRecordData, setNewRecordData] = useState<Partial<EMoURecord>>({});
-  const [editingNewCell, setEditingNewCell] = useState<string | null>(null);
 
   const departments = [
     "CSE",
@@ -64,32 +56,6 @@ function HomePage() {
     filterRecords();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [records, selectedDepartment, selectedStatus, searchTerm]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (!editingCell) return;
-
-      const target = event.target as HTMLElement;
-      
-      // Check if click is on an editable cell or date input
-      const isEditableCell = target.hasAttribute('contenteditable') || target.closest('[contenteditable="true"]');
-      const isDateInput = target.tagName === 'INPUT' && target.getAttribute('type') === 'date';
-      const isWithinDateInput = target.closest('input[type="date"]');
-
-      // If clicking outside editing cell (and not on a date input), auto-save
-      if (!isEditableCell && !isDateInput && !isWithinDateInput) {
-        saveInlineEdit();
-      }
-    };
-
-    if (editingCell) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [editingCell, inlineEditData, user]);
 
   const loadRecords = async () => {
     setLoading(true);
@@ -123,17 +89,6 @@ function HomePage() {
           r.id.toLowerCase().includes(term),
       );
     }
-
-    // Sort by department alphabetically (A-Z), then by ID sequential number (last 3 digits)
-    filtered.sort((a, b) => {
-      const deptCompare = a.department.localeCompare(b.department);
-      if (deptCompare !== 0) return deptCompare;
-      
-      // Extract last 3 digits from ID (e.g., "26CSE001" -> 1)
-      const aSeq = parseInt(a.id.slice(-3));
-      const bSeq = parseInt(b.id.slice(-3));
-      return aSeq - bSeq;
-    });
 
     setFilteredRecords(filtered);
   };
@@ -273,12 +228,8 @@ function HomePage() {
   };
 
   const handleDoubleClick = (record: EMoURecord) => {
-    // Deprecated - using single click on cells now
-  };
-
-  const handleCellClick = (record: EMoURecord, field: keyof EMoURecord) => {
-    if (canEdit(record.createdBy, record.department) && field !== 'id' && field !== 'createdBy' && field !== 'createdByName' && field !== 'createdAt') {
-      setEditingCell({ recordId: record.id, field });
+    if (canEdit(record.createdBy, record.department)) {
+      setInlineEditingId(record.id);
       setInlineEditData(record);
     }
   };
@@ -291,29 +242,20 @@ function HomePage() {
   };
 
   const saveInlineEdit = async () => {
-    if (!editingCell || !user) return;
+    if (!inlineEditingId || !user) return;
 
     try {
-      const updatedData = {
+      await updateEMoU(inlineEditingId, {
         ...inlineEditData,
         updatedBy: user.uid,
         updatedByName: user.displayName,
         updatedAt: new Date(),
-      };
+      });
 
-      await updateEMoU(editingCell.recordId, updatedData);
-
-      // Update local state instead of reloading from database
-      setRecords((prevRecords) =>
-        prevRecords.map((record) =>
-          record.id === editingCell.recordId
-            ? { ...record, ...updatedData }
-            : record
-        )
-      );
-
-      setEditingCell(null);
+      setInlineEditingId(null);
       setInlineEditData({});
+      loadRecords();
+      setAlert({ message: "Record updated successfully!", type: "success" });
     } catch (error) {
       console.error("Failed to update record:", error);
       setAlert({ message: "Failed to update record", type: "error" });
@@ -321,68 +263,8 @@ function HomePage() {
   };
 
   const cancelInlineEdit = () => {
-    setEditingCell(null);
+    setInlineEditingId(null);
     setInlineEditData({});
-  };
-
-  const handleNewRecordFieldChange = (field: string, value: string | number) => {
-    setNewRecordData({ ...newRecordData, [field]: value });
-  };
-
-  const saveNewRecord = async (data: Partial<EMoURecord>) => {
-    if (!user) return;
-
-    // Validate required fields
-    if (!data.companyName || !data.department) {
-      setAlert({ message: "Company Name and Department are required!", type: "error" });
-      return;
-    }
-
-    try {
-      const now = new Date();
-      const recordData = {
-        department: data.department,
-        companyName: data.companyName,
-        fromDate: data.fromDate || "",
-        toDate: data.toDate || "",
-        status: data.status || "Draft",
-        description: data.description || "",
-        documentAvailability: data.documentAvailability || "Not Available",
-        goingForRenewal: data.goingForRenewal || "No",
-        perStudentCost: data.perStudentCost || 0,
-        placementOpportunity: data.placementOpportunity || 0,
-        internshipOpportunity: data.internshipOpportunity || 0,
-        companyRelationship: (data.companyRelationship || 3) as 1 | 2 | 3 | 4 | 5,
-        aboutCompany: data.aboutCompany,
-        companyAddress: data.companyAddress,
-        companyWebsite: data.companyWebsite,
-        industryContactName: data.industryContactName,
-        industryContactMobile: data.industryContactMobile,
-        industryContactEmail: data.industryContactEmail,
-        institutionContactName: data.institutionContactName,
-        institutionContactMobile: data.institutionContactMobile,
-        institutionContactEmail: data.institutionContactEmail,
-        clubsAligned: data.clubsAligned,
-        sdgGoals: data.sdgGoals,
-        skillsTechnologies: data.skillsTechnologies,
-        benefitsAchieved: data.benefitsAchieved,
-        scannedCopy: data.scannedCopy,
-        createdBy: user.uid,
-        createdByName: user.displayName,
-        createdAt: now,
-      };
-
-      await createEMoU(recordData as Omit<EMoURecord, "id">);
-      
-      setCreatingNewRecord(false);
-      setNewRecordData({});
-      setEditingNewCell(null);
-      loadRecords();
-      setAlert({ message: "Record created successfully!", type: "success" });
-    } catch (error) {
-      console.error("Failed to create record:", error);
-      setAlert({ message: "Failed to create record", type: "error" });
-    }
   };
 
   const handleExport = () => {
@@ -431,46 +313,6 @@ function HomePage() {
     a.download = filename;
     a.click();
     window.URL.revokeObjectURL(url);
-  };
-
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    // Don't start dragging if clicking on interactive elements
-    const target = e.target as HTMLElement;
-    if (
-      target.tagName === "INPUT" ||
-      target.tagName === "SELECT" ||
-      target.tagName === "TEXTAREA" ||
-      target.tagName === "BUTTON" ||
-      target.tagName === "A" ||
-      target.closest("button") ||
-      target.closest("a")
-    ) {
-      return;
-    }
-
-    setIsDragging(true);
-    setDragStart({ x: e.clientX, y: e.clientY });
-    const container = e.currentTarget;
-    setScrollStart({ left: container.scrollLeft, top: container.scrollTop });
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isDragging) return;
-
-    const container = e.currentTarget;
-    const dx = e.clientX - dragStart.x;
-    const dy = e.clientY - dragStart.y;
-
-    container.scrollLeft = scrollStart.left - dx;
-    container.scrollTop = scrollStart.top - dy;
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const handleMouseLeave = () => {
-    setIsDragging(false);
   };
 
   const stats = {
@@ -675,28 +517,9 @@ function HomePage() {
             </div>
           ) : (
             <>
-              <div
-                className="overflow-x-auto bg-white rounded-lg shadow-sm relative"
-                style={{ cursor: isDragging ? "grabbing" : "grab" }}
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={() => { handleMouseLeave(); setShowAddButton(false); }}
-                onMouseEnter={() => setShowAddButton(true)}
-              >
-                {/* Floating Add Button */}
-                {showAddButton && (
-                  <button
-                    onClick={() => setShowForm(true)}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    className="absolute top-4 right-4 z-10 bg-blue-600 text-white rounded-full w-10 h-10 flex items-center justify-center shadow-lg hover:bg-blue-700 transition-all hover:scale-110"
-                    title="Add new eMoU record"
-                  >
-                    <span className="text-2xl leading-none">+</span>
-                  </button>
-                )}
+              <div className="overflow-x-auto bg-white rounded-lg shadow-sm">
                 <table className="sheet-table">
-                  <thead className="sticky top-0 z-10 bg-white shadow-sm">
+                  <thead>
                     <tr>
                       <th style={{ width: "100px" }}>ID</th>
                       <th style={{ minWidth: "200px" }}>Company Name</th>
@@ -730,373 +553,605 @@ function HomePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {/* Inline New Record Row */}
-                    {!creatingNewRecord ? (
-                      <tr className="bg-blue-50 border-b-2 border-blue-200">
-                        <td className="text-center">
-                          <button
-                            onClick={() => {
-                              setCreatingNewRecord(true);
-                              setNewRecordData({});
-                            }}
-                            className="text-blue-600 hover:text-blue-800 font-bold text-lg"
-                            title="Add new record"
-                          >
-                            +
-                          </button>
-                        </td>
-                        <td colSpan={28} className="text-xs text-blue-600 italic">
-                          Click + to add a new eMoU record inline
-                        </td>
-                      </tr>
-                    ) : (
-                      <tr 
-                        className="bg-green-50 border-b-2 border-green-300"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape') {
-                            setCreatingNewRecord(false);
-                            setNewRecordData({});
-                            setEditingNewCell(null);
-                          }
-                        }}
-                      >
-                        <td className="text-center text-xs text-gray-500">Auto</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('companyName', e.currentTarget.textContent || '')} className="cursor-text bg-white border-2 border-green-400" style={{ minWidth: '200px' }}>{newRecordData.companyName || ''}</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('department', e.currentTarget.textContent || '')} className="cursor-text bg-white border-2 border-green-400">{newRecordData.department || ''}</td>
-                        <td className="bg-white p-0"><input type="date" onChange={(e) => { const val = e.target.value; if (val) { const [year, month, day] = val.split('-'); handleNewRecordFieldChange('fromDate', `${day}.${month}.${year}`); } }} className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400" /></td>
-                        <td className="bg-white p-0"><input type="date" onChange={(e) => { const val = e.target.value; if (val) { const [year, month, day] = val.split('-'); handleNewRecordFieldChange('toDate', `${day}.${month}.${year}`); } }} className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400" /></td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('status', e.currentTarget.textContent || '')} className="cursor-text bg-white">{newRecordData.status || ''}</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('description', e.currentTarget.textContent || '')} className="cursor-text bg-white" style={{ minWidth: '250px' }}>{newRecordData.description || ''}</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('aboutCompany', e.currentTarget.textContent || '')} className="cursor-text bg-white text-xs">{newRecordData.aboutCompany || ''}</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('companyAddress', e.currentTarget.textContent || '')} className="cursor-text bg-white text-xs">{newRecordData.companyAddress || ''}</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('companyWebsite', e.currentTarget.textContent || '')} className="cursor-text bg-white text-xs">{newRecordData.companyWebsite || ''}</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('companyRelationship', parseInt(e.currentTarget.textContent || '3'))} className="cursor-text bg-white text-center">{newRecordData.companyRelationship || 3}</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('industryContactName', e.currentTarget.textContent || '')} className="cursor-text bg-white text-xs">{newRecordData.industryContactName || ''}</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('industryContactMobile', e.currentTarget.textContent || '')} className="cursor-text bg-white text-xs">{newRecordData.industryContactMobile || ''}</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('industryContactEmail', e.currentTarget.textContent || '')} className="cursor-text bg-white text-xs">{newRecordData.industryContactEmail || ''}</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('institutionContactName', e.currentTarget.textContent || '')} className="cursor-text bg-white text-xs">{newRecordData.institutionContactName || ''}</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('institutionContactMobile', e.currentTarget.textContent || '')} className="cursor-text bg-white text-xs">{newRecordData.institutionContactMobile || ''}</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('institutionContactEmail', e.currentTarget.textContent || '')} className="cursor-text bg-white text-xs">{newRecordData.institutionContactEmail || ''}</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('clubsAligned', e.currentTarget.textContent || '')} className="cursor-text bg-white text-xs">{newRecordData.clubsAligned || ''}</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('sdgGoals', e.currentTarget.textContent || '')} className="cursor-text bg-white text-xs">{newRecordData.sdgGoals || ''}</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('skillsTechnologies', e.currentTarget.textContent || '')} className="cursor-text bg-white text-xs">{newRecordData.skillsTechnologies || ''}</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('perStudentCost', parseInt(e.currentTarget.textContent || '0'))} className="cursor-text bg-white text-center">{newRecordData.perStudentCost || 0}</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('placementOpportunity', parseInt(e.currentTarget.textContent || '0'))} className="cursor-text bg-white text-center">{newRecordData.placementOpportunity || 0}</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('internshipOpportunity', parseInt(e.currentTarget.textContent || '0'))} className="cursor-text bg-white text-center">{newRecordData.internshipOpportunity || 0}</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('goingForRenewal', e.currentTarget.textContent || '')} className="cursor-text bg-white text-center">{newRecordData.goingForRenewal || 'No'}</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('benefitsAchieved', e.currentTarget.textContent || '')} className="cursor-text bg-white text-xs">{newRecordData.benefitsAchieved || ''}</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('documentAvailability', e.currentTarget.textContent || '')} className="cursor-text bg-white text-xs">{newRecordData.documentAvailability || 'Not Available'}</td>
-                        <td contentEditable suppressContentEditableWarning onBlur={(e) => handleNewRecordFieldChange('scannedCopy', e.currentTarget.textContent || '')} className="cursor-text bg-white text-xs">{newRecordData.scannedCopy || ''}</td>
-                        <td className="text-xs">{user?.displayName}</td>
-                        <td>
-                          <div className="flex gap-1">
-                            <button onClick={() => saveNewRecord(newRecordData)} className="text-xs text-green-600 hover:text-green-800 font-semibold">Save</button>
-                            <span className="text-[#d1d5db]">|</span>
-                            <button onClick={() => { setCreatingNewRecord(false); setNewRecordData({}); setEditingNewCell(null); }} className="text-xs text-red-600 hover:text-red-800">Cancel</button>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
                     {filteredRecords.map((record) => {
-                      const isEditable = canEdit(record.createdBy, record.department);
-
-                      const renderEditableCell = (
-                        field: keyof EMoURecord, 
-                        content: React.ReactNode, 
-                        className: string = "text-xs",
-                        truncateLength?: number
-                      ) => {
-                        const isEditing = editingCell?.recordId === record.id && editingCell?.field === field;
-                        const cellStyle = isEditing 
-                          ? { 
-                              border: '3px solid #000000', 
-                              outline: 'none',
-                              padding: '4px',
-                              backgroundColor: '#f5f5f5'
-                            } 
-                          : {};
-                        
-                        let displayContent = content;
-                        if (truncateLength && typeof content === 'string' && content.length > truncateLength) {
-                          displayContent = content.substring(0, truncateLength) + '...';
-                        }
-                        
-                        return (
-                          <td
-                            className={`${className} ${isEditable ? 'cursor-text hover:bg-blue-50' : ''}`}
-                            contentEditable={isEditing}
-                            suppressContentEditableWarning
-                            onClick={() => isEditable && handleCellClick(record, field)}
-                            onBlur={(e) => {
-                              if (isEditing) {
-                                handleInlineFieldChange(field, e.currentTarget.textContent || '');
-                              }
-                            }}
-                            style={cellStyle}
-                            title={truncateLength && typeof content === 'string' ? content : (isEditable && !isEditing ? "Click to edit" : "")}
-                          >
-                            {displayContent}
-                          </td>
-                        );
-                      };
+                      const isEditing = inlineEditingId === record.id;
+                      const editData = isEditing ? inlineEditData : record;
 
                       return (
                         <tr
                           key={record.id}
-                          className="hover:bg-gray-50"
+                          onDoubleClick={() => handleDoubleClick(record)}
+                          className={`${
+                            isEditing
+                              ? "bg-blue-50 border-l-4 border-blue-500"
+                              : "hover:bg-gray-50 cursor-pointer"
+                          }`}
+                          title={
+                            !isEditing &&
+                            canEdit(record.createdBy, record.department)
+                              ? "Double-click to edit"
+                              : ""
+                          }
                         >
                           <td className="font-medium text-[#2563eb] font-mono">
                             {record.id}
                           </td>
-                          {renderEditableCell("companyName", record.companyName, "")}
-                          {renderEditableCell("department", record.department, "")}
-                          {(() => {
-                            const isEditing = editingCell?.recordId === record.id && editingCell?.field === 'fromDate';
-                            const cellStyle = isEditing 
-                              ? { border: '3px solid #000000', outline: 'none', padding: '0', backgroundColor: '#f5f5f5' } 
-                              : {};
-                            
-                            // Convert dd.mm.yyyy to yyyy-mm-dd for date input
-                            const convertToInputFormat = (dateStr: string) => {
-                              if (!dateStr) return '';
-                              const [day, month, year] = dateStr.split('.');
-                              return `${year}-${month}-${day}`;
-                            };
-                            
-                            return (
-                              <td
-                                className={`${isEditable ? 'cursor-text hover:bg-blue-50' : ''}`}
-                                onClick={() => isEditable && handleCellClick(record, 'fromDate')}
-                                style={cellStyle}
-                                title={isEditable && !isEditing ? "Click to edit" : ""}
+                          <td>
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editData.companyName || ""}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "companyName",
+                                    e.target.value,
+                                  )
+                                }
+                                className="w-full px-1 py-0.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                autoFocus
+                              />
+                            ) : (
+                              record.companyName
+                            )}
+                          </td>
+                          <td>
+                            {isEditing ? (
+                              <select
+                                value={editData.department || ""}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "department",
+                                    e.target.value,
+                                  )
+                                }
+                                className="w-full px-1 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                               >
-                                {isEditing ? (
-                                  <input
-                                    type="date"
-                                    defaultValue={convertToInputFormat(record.fromDate)}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      if (val) {
-                                        const [year, month, day] = val.split('-');
-                                        handleInlineFieldChange('fromDate', `${day}.${month}.${year}`);
-                                      }
-                                    }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        saveInlineEdit();
-                                      } else if (e.key === 'Escape') {
-                                        cancelInlineEdit();
-                                      }
-                                    }}
-                                    autoFocus
-                                    className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                  />
-                                ) : (
-                                  record.fromDate
-                                )}
-                              </td>
-                            );
-                          })()}
-                          {(() => {
-                            const isEditing = editingCell?.recordId === record.id && editingCell?.field === 'toDate';
-                            const cellStyle = isEditing 
-                              ? { border: '3px solid #000000', outline: 'none', padding: '0', backgroundColor: '#f5f5f5' } 
-                              : {};
-                            
-                            // Convert dd.mm.yyyy to yyyy-mm-dd for date input
-                            const convertToInputFormat = (dateStr: string) => {
-                              if (!dateStr) return '';
-                              const [day, month, year] = dateStr.split('.');
-                              return `${year}-${month}-${day}`;
-                            };
-                            
-                            return (
-                              <td
-                                className={`${isEditable ? 'cursor-text hover:bg-blue-50' : ''}`}
-                                onClick={() => isEditable && handleCellClick(record, 'toDate')}
-                                style={cellStyle}
-                                title={isEditable && !isEditing ? "Click to edit" : ""}
+                                {departments.map((dept) => (
+                                  <option key={dept} value={dept}>
+                                    {dept}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              record.department
+                            )}
+                          </td>
+                          <td>
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editData.fromDate || ""}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "fromDate",
+                                    e.target.value,
+                                  )
+                                }
+                                placeholder="DD.MM.YYYY"
+                                className="w-full px-1 py-0.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            ) : (
+                              record.fromDate
+                            )}
+                          </td>
+                          <td>
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editData.toDate || ""}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "toDate",
+                                    e.target.value,
+                                  )
+                                }
+                                placeholder="DD.MM.YYYY"
+                                className="w-full px-1 py-0.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            ) : (
+                              record.toDate
+                            )}
+                          </td>
+                          <td>
+                            {isEditing ? (
+                              <select
+                                value={editData.status || ""}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "status",
+                                    e.target.value,
+                                  )
+                                }
+                                className="w-full px-1 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                               >
-                                {isEditing ? (
-                                  <input
-                                    type="date"
-                                    defaultValue={convertToInputFormat(record.toDate)}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      if (val) {
-                                        const [year, month, day] = val.split('-');
-                                        handleInlineFieldChange('toDate', `${day}.${month}.${year}`);
-                                      }
-                                    }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        saveInlineEdit();
-                                      } else if (e.key === 'Escape') {
-                                        cancelInlineEdit();
-                                      }
-                                    }}
-                                    autoFocus
-                                    className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                  />
-                                ) : (
-                                  record.toDate
-                                )}
-                              </td>
-                            );
-                          })()}
-                          {(() => {
-                            const isEditing = editingCell?.recordId === record.id && editingCell?.field === 'status';
-                            const cellStyle = isEditing 
-                              ? { border: '3px solid #000000', outline: 'none', padding: '4px', backgroundColor: '#f5f5f5' } 
-                              : {};
-                            
-                            return (
-                              <td
-                                className={`${isEditable ? 'cursor-text hover:bg-blue-50' : ''}`}
-                                contentEditable={isEditing}
-                                suppressContentEditableWarning
-                                onClick={() => isEditable && handleCellClick(record, 'status')}
-                                onBlur={(e) => {
-                                  if (isEditing) {
-                                    handleInlineFieldChange('status', e.currentTarget.textContent || '');
-                                  }
-                                }}
-                                style={cellStyle}
-                                title={isEditable && !isEditing ? "Click to edit" : ""}
+                                <option value="Active">Active</option>
+                                <option value="Expired">Expired</option>
+                                <option value="Renewal Pending">
+                                  Renewal Pending
+                                </option>
+                                <option value="Draft">Draft</option>
+                              </select>
+                            ) : (
+                              <span
+                                className={`inline-flex px-2 py-1 text-xs font-medium rounded ${getStatusColor(record.status)}`}
                               >
-                                {isEditing ? (
-                                  record.status
-                                ) : (
-                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(record.status)}`}>
-                                    {record.status}
-                                  </span>
-                                )}
-                              </td>
-                            );
-                          })()}
-                          {renderEditableCell("description", record.description, "text-xs", 80)}
-                          {renderEditableCell("aboutCompany", record.aboutCompany || "-", "text-xs", 50)}
-                          {renderEditableCell("companyAddress", record.companyAddress || "-", "text-xs", 50)}
-                          {(() => {
-                            const isEditing = editingCell?.recordId === record.id && editingCell?.field === 'companyWebsite';
-                            const cellStyle = isEditing 
-                              ? { border: '3px solid #000000', outline: 'none', padding: '4px', backgroundColor: '#f5f5f5' } 
-                              : {};
-                            
-                            return (
-                              <td
-                                className={`text-xs ${isEditable ? 'cursor-text hover:bg-blue-50' : ''}`}
-                                contentEditable={isEditing}
-                                suppressContentEditableWarning
-                                onClick={() => isEditable && handleCellClick(record, 'companyWebsite')}
-                                onBlur={(e) => {
-                                  if (isEditing) {
-                                    handleInlineFieldChange('companyWebsite', e.currentTarget.textContent || '');
-                                  }
-                                }}
-                                style={cellStyle}
-                                title={isEditable && !isEditing ? "Click to edit" : ""}
+                                {record.status}
+                              </span>
+                            )}
+                          </td>
+                          <td className="text-xs" title={record.description}>
+                            {isEditing ? (
+                              <textarea
+                                value={editData.description || ""}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "description",
+                                    e.target.value,
+                                  )
+                                }
+                                rows={2}
+                                className="w-full px-1 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            ) : record.description.length > 80 ? (
+                              record.description.substring(0, 80) + "..."
+                            ) : (
+                              record.description
+                            )}
+                          </td>
+                          <td className="text-xs" title={record.aboutCompany}>
+                            {isEditing ? (
+                              <textarea
+                                value={editData.aboutCompany || ""}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "aboutCompany",
+                                    e.target.value,
+                                  )
+                                }
+                                rows={2}
+                                className="w-full px-1 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            ) : record.aboutCompany &&
+                              record.aboutCompany.length > 50 ? (
+                              record.aboutCompany.substring(0, 50) + "..."
+                            ) : (
+                              record.aboutCompany || "-"
+                            )}
+                          </td>
+                          <td className="text-xs" title={record.companyAddress}>
+                            {isEditing ? (
+                              <textarea
+                                value={editData.companyAddress || ""}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "companyAddress",
+                                    e.target.value,
+                                  )
+                                }
+                                rows={2}
+                                className="w-full px-1 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            ) : record.companyAddress &&
+                              record.companyAddress.length > 50 ? (
+                              record.companyAddress.substring(0, 50) + "..."
+                            ) : (
+                              record.companyAddress || "-"
+                            )}
+                          </td>
+                          <td className="text-xs">
+                            {isEditing ? (
+                              <input
+                                type="url"
+                                value={editData.companyWebsite || ""}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "companyWebsite",
+                                    e.target.value,
+                                  )
+                                }
+                                className="w-full px-1 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            ) : record.companyWebsite ? (
+                              <a
+                                href={record.companyWebsite}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline"
+                                onClick={(e) => e.stopPropagation()}
                               >
-                                {isEditing ? (
-                                  record.companyWebsite || ""
-                                ) : record.companyWebsite ? (
-                                  <a
-                                    href={record.companyWebsite}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-blue-600 hover:underline"
-                                    onClick={(e) => { e.stopPropagation(); }}
-                                  >
-                                    {record.companyWebsite.length > 30 ? record.companyWebsite.substring(0, 30) + "..." : record.companyWebsite}
-                                  </a>
-                                ) : "-"}
-                              </td>
-                            );
-                          })()}
-                          {renderEditableCell("companyRelationship", record.companyRelationship || 3, "text-center")}
-                          {renderEditableCell("industryContactName", record.industryContactName || "-", "text-xs")}
-                          {renderEditableCell("industryContactMobile", record.industryContactMobile || "-", "text-xs")}
-                          {renderEditableCell("industryContactEmail", record.industryContactEmail || "-", "text-xs")}
-                          {renderEditableCell("institutionContactName", record.institutionContactName || "-", "text-xs")}
-                          {renderEditableCell("institutionContactMobile", record.institutionContactMobile || "-", "text-xs")}
-                          {renderEditableCell("institutionContactEmail", record.institutionContactEmail || "-", "text-xs")}
-                          {renderEditableCell("clubsAligned", record.clubsAligned || "-", "text-xs")}
-                          {renderEditableCell("sdgGoals", record.sdgGoals || "-", "text-xs")}
-                          {renderEditableCell("skillsTechnologies", record.skillsTechnologies || "-", "text-xs", 50)}
-                          {renderEditableCell("perStudentCost", record.perStudentCost || 0, "text-center")}
-                          {renderEditableCell("placementOpportunity", record.placementOpportunity || 0, "text-center")}
-                          {renderEditableCell("internshipOpportunity", record.internshipOpportunity || 0, "text-center")}
-                          {renderEditableCell("goingForRenewal", record.goingForRenewal || "No", "text-center")}
-                          {renderEditableCell("benefitsAchieved", record.benefitsAchieved || "-", "text-xs", 50)}
-                          {renderEditableCell("documentAvailability", record.documentAvailability || "Not Available", "text-xs")}
-                          {(() => {
-                            const isEditing = editingCell?.recordId === record.id && editingCell?.field === 'scannedCopy';
-                            const cellStyle = isEditing 
-                              ? { border: '3px solid #000000', outline: 'none', padding: '4px', backgroundColor: '#f5f5f5' } 
-                              : {};
-                            
-                            return (
-                              <td
-                                className={`text-xs ${isEditable ? 'cursor-text hover:bg-blue-50' : ''}`}
-                                contentEditable={isEditing}
-                                suppressContentEditableWarning
-                                onClick={() => isEditable && handleCellClick(record, 'scannedCopy')}
-                                onBlur={(e) => {
-                                  if (isEditing) {
-                                    handleInlineFieldChange('scannedCopy', e.currentTarget.textContent || '');
-                                  }
-                                }}
-                                style={cellStyle}
-                                title={isEditable && !isEditing ? "Click to edit" : record.scannedCopy || ""}
+                                {record.companyWebsite.length > 30
+                                  ? record.companyWebsite.substring(0, 30) +
+                                    "..."
+                                  : record.companyWebsite}
+                              </a>
+                            ) : (
+                              "-"
+                            )}
+                          </td>
+                          <td className="text-center">
+                            {isEditing ? (
+                              <select
+                                value={editData.companyRelationship || 3}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "companyRelationship",
+                                    parseInt(e.target.value),
+                                  )
+                                }
+                                className="w-full px-1 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
                               >
-                                {isEditing ? (
-                                  record.scannedCopy || ""
-                                ) : record.scannedCopy ? (
-                                  <a
-                                    href={record.scannedCopy}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-blue-600 hover:underline"
-                                    onClick={(e) => { e.stopPropagation(); }}
-                                  >
-                                    View Doc
-                                  </a>
-                                ) : "-"}
-                              </td>
-                            );
-                          })()}
+                                <option value={1}>1</option>
+                                <option value={2}>2</option>
+                                <option value={3}>3</option>
+                                <option value={4}>4</option>
+                                <option value={5}>5</option>
+                              </select>
+                            ) : (
+                              record.companyRelationship || 3
+                            )}
+                          </td>
+                          <td className="text-xs">
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editData.industryContactName || ""}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "industryContactName",
+                                    e.target.value,
+                                  )
+                                }
+                                className="w-full px-1 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            ) : (
+                              record.industryContactName || "-"
+                            )}
+                          </td>
+                          <td className="text-xs">
+                            {isEditing ? (
+                              <input
+                                type="tel"
+                                value={editData.industryContactMobile || ""}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "industryContactMobile",
+                                    e.target.value,
+                                  )
+                                }
+                                className="w-full px-1 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            ) : (
+                              record.industryContactMobile || "-"
+                            )}
+                          </td>
+                          <td className="text-xs">
+                            {isEditing ? (
+                              <input
+                                type="email"
+                                value={editData.industryContactEmail || ""}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "industryContactEmail",
+                                    e.target.value,
+                                  )
+                                }
+                                className="w-full px-1 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            ) : (
+                              record.industryContactEmail || "-"
+                            )}
+                          </td>
+                          <td className="text-xs">
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editData.institutionContactName || ""}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "institutionContactName",
+                                    e.target.value,
+                                  )
+                                }
+                                className="w-full px-1 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            ) : (
+                              record.institutionContactName || "-"
+                            )}
+                          </td>
+                          <td className="text-xs">
+                            {isEditing ? (
+                              <input
+                                type="tel"
+                                value={editData.institutionContactMobile || ""}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "institutionContactMobile",
+                                    e.target.value,
+                                  )
+                                }
+                                className="w-full px-1 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            ) : (
+                              record.institutionContactMobile || "-"
+                            )}
+                          </td>
+                          <td className="text-xs">
+                            {isEditing ? (
+                              <input
+                                type="email"
+                                value={editData.institutionContactEmail || ""}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "institutionContactEmail",
+                                    e.target.value,
+                                  )
+                                }
+                                className="w-full px-1 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            ) : (
+                              record.institutionContactEmail || "-"
+                            )}
+                          </td>
+                          <td className="text-xs">
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editData.clubsAligned || ""}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "clubsAligned",
+                                    e.target.value,
+                                  )
+                                }
+                                className="w-full px-1 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            ) : (
+                              record.clubsAligned || "-"
+                            )}
+                          </td>
+                          <td className="text-xs">
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editData.sdgGoals || ""}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "sdgGoals",
+                                    e.target.value,
+                                  )
+                                }
+                                className="w-full px-1 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            ) : (
+                              record.sdgGoals || "-"
+                            )}
+                          </td>
+                          <td
+                            className="text-xs"
+                            title={record.skillsTechnologies}
+                          >
+                            {isEditing ? (
+                              <textarea
+                                value={editData.skillsTechnologies || ""}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "skillsTechnologies",
+                                    e.target.value,
+                                  )
+                                }
+                                rows={2}
+                                className="w-full px-1 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            ) : record.skillsTechnologies &&
+                              record.skillsTechnologies.length > 50 ? (
+                              record.skillsTechnologies.substring(0, 50) + "..."
+                            ) : (
+                              record.skillsTechnologies || "-"
+                            )}
+                          </td>
+                          <td className="text-center">
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                value={editData.perStudentCost || 0}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "perStudentCost",
+                                    parseInt(e.target.value) || 0,
+                                  )
+                                }
+                                min="0"
+                                className="w-16 px-1 py-0.5 text-sm text-center border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            ) : (
+                              record.perStudentCost || 0
+                            )}
+                          </td>
+                          <td className="text-center">
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                value={editData.placementOpportunity || 0}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "placementOpportunity",
+                                    parseInt(e.target.value) || 0,
+                                  )
+                                }
+                                min="0"
+                                className="w-16 px-1 py-0.5 text-sm text-center border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            ) : (
+                              record.placementOpportunity || 0
+                            )}
+                          </td>
+                          <td className="text-center">
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                value={editData.internshipOpportunity || 0}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "internshipOpportunity",
+                                    parseInt(e.target.value) || 0,
+                                  )
+                                }
+                                min="0"
+                                className="w-16 px-1 py-0.5 text-sm text-center border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            ) : (
+                              record.internshipOpportunity || 0
+                            )}
+                          </td>
+                          <td className="text-center">
+                            {isEditing ? (
+                              <select
+                                value={editData.goingForRenewal || "No"}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "goingForRenewal",
+                                    e.target.value,
+                                  )
+                                }
+                                className="w-full px-1 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                <option value="Yes">Yes</option>
+                                <option value="No">No</option>
+                              </select>
+                            ) : (
+                              record.goingForRenewal || "No"
+                            )}
+                          </td>
+                          <td
+                            className="text-xs"
+                            title={record.benefitsAchieved}
+                          >
+                            {isEditing ? (
+                              <textarea
+                                value={editData.benefitsAchieved || ""}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "benefitsAchieved",
+                                    e.target.value,
+                                  )
+                                }
+                                rows={2}
+                                className="w-full px-1 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            ) : record.benefitsAchieved &&
+                              record.benefitsAchieved.length > 50 ? (
+                              record.benefitsAchieved.substring(0, 50) + "..."
+                            ) : (
+                              record.benefitsAchieved || "-"
+                            )}
+                          </td>
+                          <td className="text-xs">
+                            {isEditing ? (
+                              <select
+                                value={
+                                  editData.documentAvailability ||
+                                  "Not Available"
+                                }
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "documentAvailability",
+                                    e.target.value,
+                                  )
+                                }
+                                className="w-full px-1 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                <option value="Available">Available</option>
+                                <option value="Not Available">
+                                  Not Available
+                                </option>
+                              </select>
+                            ) : (
+                              record.documentAvailability || "Not Available"
+                            )}
+                          </td>
+                          <td className="text-xs">
+                            {isEditing ? (
+                              <input
+                                type="url"
+                                value={editData.scannedCopy || ""}
+                                onChange={(e) =>
+                                  handleInlineFieldChange(
+                                    "scannedCopy",
+                                    e.target.value,
+                                  )
+                                }
+                                className="w-full px-1 py-0.5 text-xs border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="Drive link"
+                              />
+                            ) : record.scannedCopy ? (
+                              <a
+                                href={record.scannedCopy}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                View Doc
+                              </a>
+                            ) : (
+                              "-"
+                            )}
+                          </td>
                           <td className="text-xs">{record.createdByName}</td>
                           <td>
-                            <div className="flex gap-1">
-                              {isEditable && (
-                                <>
-                                  <button
-                                    onClick={() => handleEdit(record)}
-                                    className="text-xs text-blue-600 hover:text-blue-800"
-                                  >
-                                    Form
-                                  </button>
-                                  <span className="text-[#d1d5db]">|</span>
-                                </>
-                              )}
-                              <button
-                                onClick={() => setViewingRecord(record)}
-                                className="text-xs text-blue-600 hover:text-blue-800"
-                              >
-                                View
-                              </button>
-                              {canDelete() && (
-                                <>
-                                  <span className="text-[#d1d5db]">|</span>
-                                  <button
-                                    onClick={() => handleDeleteRecord(record.id)}
-                                    className="text-xs text-red-600 hover:text-red-800"
-                                  >
-                                    Del
-                                  </button>
-                                </>
-                              )}
-                            </div>
+                            {isEditing ? (
+                              <div className="flex gap-1 whitespace-nowrap">
+                                <button
+                                  onClick={saveInlineEdit}
+                                  className="text-xs text-green-600 hover:text-green-800 font-medium"
+                                >
+                                  ✓ Save
+                                </button>
+                                <span className="text-[#d1d5db]">|</span>
+                                <button
+                                  onClick={cancelInlineEdit}
+                                  className="text-xs text-red-600 hover:text-red-800 font-medium"
+                                >
+                                  ✕ Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-1">
+                                {canEdit(
+                                  record.createdBy,
+                                  record.department,
+                                ) && (
+                                  <>
+                                    <button
+                                      onClick={() => handleEdit(record)}
+                                      className="text-xs text-blue-600 hover:text-blue-800"
+                                    >
+                                      Edit
+                                    </button>
+                                    <span className="text-[#d1d5db]">|</span>
+                                  </>
+                                )}
+                                <button
+                                  onClick={() => setViewingRecord(record)}
+                                  className="text-xs text-blue-600 hover:text-blue-800"
+                                >
+                                  View
+                                </button>
+                                {canDelete() && (
+                                  <>
+                                    <span className="text-[#d1d5db]">|</span>
+                                    <button
+                                      onClick={() =>
+                                        handleDeleteRecord(record.id)
+                                      }
+                                      className="text-xs text-red-600 hover:text-red-800"
+                                    >
+                                      Del
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            )}
                           </td>
                         </tr>
                       );
