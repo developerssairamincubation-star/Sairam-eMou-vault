@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import Image from "next/image";
+import { useState, useEffect } from "react";
 
 interface DocumentViewerProps {
   url: string;
@@ -11,17 +12,39 @@ interface DocumentViewerProps {
 export default function DocumentViewer({ url, title, onClose }: DocumentViewerProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [viewableUrl, setViewableUrl] = useState(url);
   
-  // For Cloudinary URLs, just use the clean URL without any flags
-  // The absence of fl_attachment allows inline viewing
-  let viewableUrl = url;
-  if (url.includes('cloudinary.com')) {
-    // Remove any fl_attachment flags that force downloads
-    viewableUrl = url.replace(/\/fl_attachment[^/]*\//g, '/').replace(/\/\//g, '/');
-  }
+  // Fetch signed URL for Cloudinary documents
+  useEffect(() => {
+    const fetchSignedUrl = async () => {
+      if (!url.includes('cloudinary.com')) {
+        setViewableUrl(url);
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/view-document?url=${encodeURIComponent(url)}`);
+        const data = await response.json();
+        
+        if (data.success && data.signedUrl) {
+          setViewableUrl(data.signedUrl);
+        } else {
+          console.error('Failed to get signed URL:', data.error);
+          // Fallback to original URL
+          setViewableUrl(url);
+        }
+      } catch (err) {
+        console.error('Error fetching signed URL:', err);
+        // Fallback to original URL
+        setViewableUrl(url);
+      }
+    };
+
+    fetchSignedUrl();
+  }, [url]);
   
-  const isPDF = viewableUrl.toLowerCase().includes('.pdf') || viewableUrl.includes('pdf');
-  const isImage = /\.(jpg|jpeg|png|gif|webp)/i.test(viewableUrl);
+  const isPDF = url.toLowerCase().includes('.pdf') || url.includes('pdf');
+  const isImage = /\.(jpg|jpeg|png|gif|webp)/i.test(url);
   
   // Use Google Docs Viewer as fallback for PDFs with authentication issues
   const googleViewerUrl = isPDF ? `https://docs.google.com/viewer?url=${encodeURIComponent(viewableUrl)}&embedded=true` : null;
@@ -104,7 +127,9 @@ export default function DocumentViewer({ url, title, onClose }: DocumentViewerPr
             </>
           ) : isImage ? (
             <div className="w-full h-full flex items-center justify-center p-4 overflow-auto">
-              <img
+              <Image
+                width={800}
+                height={800}
                 src={viewableUrl}
                 alt={title}
                 className="max-w-full max-h-full object-contain"

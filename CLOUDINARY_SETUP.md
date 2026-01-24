@@ -29,7 +29,16 @@ This guide will help you set up Cloudinary for document uploads in the Sairam eM
    - **Access mode**: `public`
 6. Click **Save**
 
-## Step 4: Configure Environment Variables
+## Step 4: Get Your API Credentials
+
+1. Go to **Settings** (gear icon in top right)
+2. On the **Account** tab, scroll to **API Keys** section
+3. You'll see:
+   - **API Key** (a long number)
+   - **API Secret** (click to reveal)
+4. Copy both values - you'll need them for server-side operations
+
+## Step 5: Configure Environment Variables
 
 1. In your project root, create a file named `.env.local`
 2. Add the following lines (replace with your actual values):
@@ -37,12 +46,21 @@ This guide will help you set up Cloudinary for document uploads in the Sairam eM
 ```env
 NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=your_cloud_name_here
 NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET=emou_docs
+
+# Server-side Cloudinary credentials (for signed URLs and secure operations)
+CLOUDINARY_CLOUD_NAME=your_cloud_name_here
+CLOUDINARY_API_KEY=your_api_key_here
+CLOUDINARY_API_SECRET=your_api_secret_here
 ```
 
-3. Replace `your_cloud_name_here` with the Cloud name from Step 2
+3. Replace the placeholder values:
+   - `your_cloud_name_here` - Cloud name from Step 2
+   - `your_api_key_here` - API Key from Step 4
+   - `your_api_secret_here` - API Secret from Step 4
 4. Save the file
+5. **IMPORTANT**: Never commit `.env.local` to version control
 
-## Step 5: Restart Your Development Server
+## Step 6: Restart Your Development Server
 
 ```bash
 pnpm dev
@@ -58,15 +76,18 @@ pnpm dev
 ## Troubleshooting
 
 ### "Upload failed" Error
+
 - Check that your Cloud Name is correct in `.env.local`
 - Verify the upload preset name is exactly `emou_docs`
 - Make sure the preset is set to **Unsigned**
 
 ### "File size should not exceed 10MB"
+
 - The file is too large
 - Compress the PDF or reduce image quality
 
 ### "Please upload only PDF or image files"
+
 - Only `.pdf`, `.jpg`, `.jpeg`, and `.png` files are allowed
 - Convert your document to one of these formats
 
@@ -79,6 +100,7 @@ pnpm dev
 ## Free Tier Limits
 
 Cloudinary free tier includes:
+
 - 25 GB storage
 - 25 GB monthly bandwidth
 - 25,000 monthly transformations

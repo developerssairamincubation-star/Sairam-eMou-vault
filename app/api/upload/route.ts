@@ -25,10 +25,14 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes);
     const base64File = `data:${file.type};base64,${buffer.toString('base64')}`;
 
+    // Determine resource type - PDFs must be 'raw' for proper access
+    const isPDF = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    const resourceType = isPDF ? 'raw' : 'auto';
+
     // Upload to Cloudinary with signed upload (full control)
     const uploadResponse = await cloudinary.uploader.upload(base64File, {
       folder: 'emou-documents',
-      resource_type: 'auto',
+      resource_type: resourceType,
       access_mode: 'public', // Ensures public access
       type: 'upload', // Upload type (not authenticated)
     });
