@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
@@ -15,8 +15,14 @@ export default function LoginPage() {
   const [resetEmail, setResetEmail] = useState("");
   const [resetSuccess, setResetSuccess] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
-  const { signIn } = useAuth();
+  const { signIn, user } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    if (user) {
+      router.push("/");
+    }
+  }, [user, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +31,6 @@ export default function LoginPage() {
 
     try {
       await signIn(email, password);
-      router.push("/");
     } catch (err) {
       const error = err as Error;
       setError(error.message || "Failed to sign in");

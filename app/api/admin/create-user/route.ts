@@ -82,8 +82,11 @@ async function sendWelcomeEmail(
       <!DOCTYPE html>
       <html>
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Gabarito:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
-          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; line-height: 1.5; color: #1f2937; margin: 0; padding: 0; background-color: #f8f9fa; }
+          body { font-family: 'Gabarito', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; line-height: 1.5; color: #1f2937; margin: 0; padding: 0; background-color: #f8f9fa; }
           .container { max-width: 560px; margin: 0 auto; background: white; }
           .header { background: #1f2937; color: white; padding: 20px; border-bottom: 3px solid #2563eb; }
           .header h1 { margin: 0; font-size: 18px; font-weight: 600; }
@@ -91,7 +94,7 @@ async function sendWelcomeEmail(
           .section { margin-bottom: 20px; }
           .credentials { background: #f8f9fa; border: 1px solid #d1d5db; padding: 16px; border-radius: 4px; }
           .credentials table { width: 100%; border-collapse: collapse; }
-          .credentials td { padding: 6px 0; font-size: 13px; }
+          .credentials td { padding: 6px 12px; font-size: 13px; }
           .credentials td:first-child { color: #6b7280; width: 100px; }
           .credentials td:last-child { font-family: 'Courier New', monospace; font-weight: 500; }
           .alert { background: #fef3c7; border-left: 3px solid #f59e0b; padding: 12px; font-size: 13px; color: #92400e; }
@@ -100,7 +103,7 @@ async function sendWelcomeEmail(
           .footer { background: #f8f9fa; padding: 16px 24px; border-top: 1px solid #d1d5db; font-size: 11px; color: #6b7280; text-align: center; }
           ul { margin: 8px 0; padding-left: 20px; font-size: 13px; }
           ul li { margin: 4px 0; }
-        </style>
+        </link>
       </head>
       <body>
         <div class="container">

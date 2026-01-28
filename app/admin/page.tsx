@@ -614,6 +614,18 @@ function AdminPage() {
                                   <option value="IT">IT</option>
                                   <option value="AIDS">AIDS</option>
                                   <option value="CSBS">CSBS</option>
+                                  <option value="E&I">E&I</option>
+                                  <option value="MECHATRONICS">
+                                    MECHATRONICS
+                                  </option>
+                                  <option value="CCE">CCE</option>
+                                  <option value="AIML">AIML</option>
+                                  <option value="CYBERSECURITY">
+                                    CYBERSECURITY
+                                  </option>
+                                  <option value="IOT">IOT</option>
+                                  <option value="EICE">EICE</option>
+                                  <option value="CSE MTECH">CSE MTECH</option>
                                 </select>
                               </div>
                             )}

@@ -1,5 +1,6 @@
 import { EMoURecord } from "@/types";
 import { useEffect, useState } from "react";
+import * as XLSX from "xlsx";
 
 interface RecordDetailPopupProps {
   title: string;
@@ -51,6 +52,97 @@ export default function RecordDetailPopup({
 
   const arrowOffset = clickX - calculateLeftPosition();
 
+  const handleExport = () => {
+    // Prepare data for export
+    const exportData = records.map((record, index) => ({
+      "S.No": index + 1,
+      ID: record.id,
+      "Company Name": record.companyName,
+      Department: record.department,
+      "From Date": record.fromDate,
+      "To Date": record.toDate,
+      Status: record.status,
+      Scope: record.scope || "National",
+      "Maintained By": record.maintainedBy || "Departments",
+      Description: record.description || "",
+      "About Company": record.aboutCompany || "",
+      "Company Address": record.companyAddress || "",
+      "Company Website": record.companyWebsite || "",
+      Relationship: record.companyRelationship || 3,
+      "Industry Contact Name": record.industryContactName || "",
+      "Industry Contact Mobile": record.industryContactMobile || "",
+      "Industry Contact Email": record.industryContactEmail || "",
+      "Institution Contact Name": record.institutionContactName || "",
+      "Institution Contact Mobile": record.institutionContactMobile || "",
+      "Institution Contact Email": record.institutionContactEmail || "",
+      "Clubs Aligned": record.clubsAligned || "",
+      "SDG Goals": record.sdgGoals || "",
+      "Skills/Technologies": record.skillsTechnologies || "",
+      "Per Student Cost": record.perStudentCost || 0,
+      "Placement Opportunities": record.placementOpportunity || 0,
+      "Internship Opportunities": record.internshipOpportunity || 0,
+      "Going For Renewal": record.goingForRenewal || "No",
+      "Benefits Achieved": record.benefitsAchieved || "",
+      "Document Availability": record.documentAvailability || "Not Available",
+      "Created By": record.createdByName || "",
+      "Created At":
+        record.createdAt instanceof Date
+          ? record.createdAt.toLocaleDateString()
+          : new Date(record.createdAt).toLocaleDateString(),
+    }));
+
+    // Create worksheet
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+
+    // Set column widths
+    const columnWidths = [
+      { wch: 6 }, // S.No
+      { wch: 12 }, // ID
+      { wch: 25 }, // Company Name
+      { wch: 12 }, // Department
+      { wch: 12 }, // From Date
+      { wch: 12 }, // To Date
+      { wch: 15 }, // Status
+      { wch: 12 }, // Scope
+      { wch: 15 }, // Maintained By
+      { wch: 40 }, // Description
+      { wch: 30 }, // About Company
+      { wch: 30 }, // Company Address
+      { wch: 25 }, // Company Website
+      { wch: 12 }, // Relationship
+      { wch: 20 }, // Industry Contact Name
+      { wch: 15 }, // Industry Contact Mobile
+      { wch: 25 }, // Industry Contact Email
+      { wch: 20 }, // Institution Contact Name
+      { wch: 15 }, // Institution Contact Mobile
+      { wch: 25 }, // Institution Contact Email
+      { wch: 20 }, // Clubs Aligned
+      { wch: 20 }, // SDG Goals
+      { wch: 30 }, // Skills/Technologies
+      { wch: 12 }, // Per Student Cost
+      { wch: 15 }, // Placement Opportunities
+      { wch: 18 }, // Internship Opportunities
+      { wch: 15 }, // Going For Renewal
+      { wch: 30 }, // Benefits Achieved
+      { wch: 18 }, // Document Availability
+      { wch: 20 }, // Created By
+      { wch: 15 }, // Created At
+    ];
+    worksheet["!cols"] = columnWidths;
+
+    // Create workbook
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Records");
+
+    // Generate filename
+    const sanitizedTitle = title.replace(/[^a-zA-Z0-9]/g, "_");
+    const timestamp = new Date().toISOString().split("T")[0];
+    const filename = `${sanitizedTitle}_${timestamp}.xlsx`;
+
+    // Download file
+    XLSX.writeFile(workbook, filename);
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-start pt-[9rem]"
@@ -93,24 +185,47 @@ export default function RecordDetailPopup({
               {records.length} {records.length === 1 ? "record" : "records"}
             </p>
           </div>
-          <button
-            onClick={handleClose}
-            className="text-slate-300 hover:text-white hover:bg-slate-600 rounded p-1.5 transition-colors"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExport}
+              className="text-slate-300 hover:text-white hover:bg-slate-600 rounded px-3 py-1.5 transition-colors flex items-center gap-1.5 text-xs font-medium"
+              title="Export to Excel"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
+              </svg>
+              Export
+            </button>
+            <button
+              onClick={handleClose}
+              className="text-slate-300 hover:text-white hover:bg-slate-600 rounded p-1.5 transition-colors"
+              title="Close"
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Content */}
