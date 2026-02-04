@@ -8,6 +8,7 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import DocumentViewer from "@/components/DocumentViewer";
 import { User, UserRole, DepartmentCode, EMoURecord } from "@/types";
 import { getAllUsers, getEMoUs, updateEMoU } from "@/lib/firestore";
+import { uploadToCloudinary } from "@/lib/cloudinary";
 import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
 
@@ -136,22 +137,14 @@ function AdminPage() {
   ) => {
     setUploadingDoc({ recordId, field });
     try {
-      const formData = new FormData();
-      formData.append("file", file);
+      const result = await uploadToCloudinary(file);
 
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error("Upload failed");
+      if (!result.success || !result.url) {
+        throw new Error(result.error || "Upload failed");
       }
 
-      const { url } = await response.json();
-
       await updateEMoU(recordId, {
-        [field]: url,
+        [field]: result.url,
       });
 
       await loadApprovalRecords();
