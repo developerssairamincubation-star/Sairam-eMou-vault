@@ -14,7 +14,7 @@ A secure, role-based web application to centrally manage Educational Memorandum 
 - Role-based access control (Admin, Master User, HOD User)
 - Protected routes and session management
 - Secure logout functionality
-- Email verification required before login
+- Email verification needed
 
 ### Secure User Creation (Admin Only)
 
