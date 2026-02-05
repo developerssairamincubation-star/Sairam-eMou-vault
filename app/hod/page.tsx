@@ -7,6 +7,7 @@ import Alert from "@/components/Alert";
 import DocumentViewer from "@/components/DocumentViewer";
 import { EMoURecord } from "@/types";
 import { getEMoUs, updateEMoU } from "@/lib/firestore";
+import { uploadToCloudinary } from "@/lib/cloudinary";
 import { useRouter } from "next/navigation";
 
 function HODPage() {
@@ -16,17 +17,25 @@ function HODPage() {
   const [pendingRecords, setPendingRecords] = useState<EMoURecord[]>([]);
   const [approvedRecords, setApprovedRecords] = useState<EMoURecord[]>([]);
   const [rejectedRecords, setRejectedRecords] = useState<EMoURecord[]>([]);
-  const [activeTab, setActiveTab] = useState<'drafts' | 'pending' | 'approved' | 'rejected'>('drafts');
-  const [viewingDocument, setViewingDocument] = useState<{ url: string; title: string } | null>(null);
+  const [activeTab, setActiveTab] = useState<
+    "drafts" | "pending" | "approved" | "rejected"
+  >("drafts");
+  const [viewingDocument, setViewingDocument] = useState<{
+    url: string;
+    title: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [uploadingDoc, setUploadingDoc] = useState<{ recordId: string; field: 'hodApprovalDoc' | 'signedAgreementDoc' } | null>(null);
+  const [uploadingDoc, setUploadingDoc] = useState<{
+    recordId: string;
+    field: "hodApprovalDoc" | "signedAgreementDoc";
+  } | null>(null);
   const [alert, setAlert] = useState<{
     message: string;
     type: "success" | "error" | "info" | "warning";
   } | null>(null);
 
   useEffect(() => {
-    if (user?.role !== 'hod') {
+    if (user?.role !== "hod") {
       router.push("/");
     } else {
       loadRecords();
@@ -39,12 +48,20 @@ function HODPage() {
     try {
       const allRecords = await getEMoUs();
       // Filter records by HOD's department
-      const myRecords = allRecords.filter(r => r.department === user?.department);
-      
-      setDraftRecords(myRecords.filter(r => r.approvalStatus === 'draft'));
-      setPendingRecords(myRecords.filter(r => r.approvalStatus === 'pending'));
-      setApprovedRecords(myRecords.filter(r => r.approvalStatus === 'approved'));
-      setRejectedRecords(myRecords.filter(r => r.approvalStatus === 'rejected'));
+      const myRecords = allRecords.filter(
+        (r) => r.department === user?.department,
+      );
+
+      setDraftRecords(myRecords.filter((r) => r.approvalStatus === "draft"));
+      setPendingRecords(
+        myRecords.filter((r) => r.approvalStatus === "pending"),
+      );
+      setApprovedRecords(
+        myRecords.filter((r) => r.approvalStatus === "approved"),
+      );
+      setRejectedRecords(
+        myRecords.filter((r) => r.approvalStatus === "rejected"),
+      );
     } catch (error) {
       console.error("Failed to load records:", error);
       setAlert({ message: "Failed to load records", type: "error" });
@@ -53,54 +70,52 @@ function HODPage() {
     }
   };
 
-  const uploadToCloudinary = async (file: File): Promise<string> => {
-    const formData = new FormData();
-    formData.append('file', file);
+  const handleCloudinaryUpload = async (file: File): Promise<string> => {
+    const result = await uploadToCloudinary(file);
 
-    try {
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Upload failed:', errorData);
-        throw new Error(errorData.error || 'Upload failed');
-      }
-      
-      const data = await response.json();
-      return data.url;
-    } catch (error) {
-      console.error('Upload failed:', error);
-      throw error;
+    if (!result.success || !result.url) {
+      throw new Error(result.error || "Upload failed");
     }
+
+    return result.url;
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, recordId: string, fieldName: 'hodApprovalDoc' | 'signedAgreementDoc') => {
+  const handleFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    recordId: string,
+    fieldName: "hodApprovalDoc" | "signedAgreementDoc",
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     // Validate file type
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+    const allowedTypes = [
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "image/jpg",
+    ];
     if (!allowedTypes.includes(file.type)) {
-      setAlert({ message: 'Please upload only PDF or image files', type: 'error' });
+      setAlert({
+        message: "Please upload only PDF or image files",
+        type: "error",
+      });
       return;
     }
 
     // Validate file size (max 10MB)
     if (file.size > 10 * 1024 * 1024) {
-      setAlert({ message: 'File size should not exceed 10MB', type: 'error' });
+      setAlert({ message: "File size should not exceed 10MB", type: "error" });
       return;
     }
 
     setUploadingDoc({ recordId, field: fieldName });
 
     try {
-      const url = await uploadToCloudinary(file);
-      
+      const url = await handleCloudinaryUpload(file);
+
       // Get the current record
-      const currentRecord = draftRecords.find(r => r.id === recordId);
+      const currentRecord = draftRecords.find((r) => r.id === recordId);
       if (!currentRecord) return;
 
       // Update the record
@@ -112,62 +127,70 @@ function HODPage() {
       };
 
       // Check if both documents are now uploaded
-      const bothDocsUploaded = fieldName === 'hodApprovalDoc' 
-        ? url && currentRecord.signedAgreementDoc
-        : currentRecord.hodApprovalDoc && url;
+      const bothDocsUploaded =
+        fieldName === "hodApprovalDoc"
+          ? url && currentRecord.signedAgreementDoc
+          : currentRecord.hodApprovalDoc && url;
 
       if (bothDocsUploaded) {
-        updatedData.approvalStatus = 'pending';
+        updatedData.approvalStatus = "pending";
       }
 
       await updateEMoU(recordId, updatedData);
-      
+
       if (bothDocsUploaded) {
-        setAlert({ 
-          message: 'Both documents uploaded! Record submitted for admin approval.', 
-          type: 'success' 
+        setAlert({
+          message:
+            "Both documents uploaded! Record submitted for admin approval.",
+          type: "success",
         });
       } else {
-        setAlert({ message: 'File uploaded successfully!', type: 'success' });
+        setAlert({ message: "File uploaded successfully!", type: "success" });
       }
-      
+
       await loadRecords();
     } catch (error) {
-      setAlert({ message: 'Failed to upload file. Please try again.', type: 'error' });
+      setAlert({
+        message: "Failed to upload file. Please try again.",
+        type: "error",
+      });
     } finally {
       setUploadingDoc(null);
     }
   };
 
-  const handleRemoveDocument = async (recordId: string, fieldName: 'hodApprovalDoc' | 'signedAgreementDoc') => {
+  const handleRemoveDocument = async (
+    recordId: string,
+    fieldName: "hodApprovalDoc" | "signedAgreementDoc",
+  ) => {
     try {
       await updateEMoU(recordId, {
         [fieldName]: null,
-        approvalStatus: 'draft', // Move back to draft if document is removed
+        approvalStatus: "draft", // Move back to draft if document is removed
         updatedAt: new Date(),
         updatedBy: user?.uid,
         updatedByName: user?.displayName,
       });
-      
-      setAlert({ message: 'Document removed successfully', type: 'info' });
+
+      setAlert({ message: "Document removed successfully", type: "info" });
       await loadRecords();
     } catch (error) {
-      setAlert({ message: 'Failed to remove document', type: 'error' });
+      setAlert({ message: "Failed to remove document", type: "error" });
     }
   };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'draft':
-        return 'bg-gray-100 text-gray-800';
-      case 'pending':
-        return 'bg-orange-100 text-orange-800';
-      case 'approved':
-        return 'bg-green-100 text-green-800';
-      case 'rejected':
-        return 'bg-red-100 text-red-800';
+      case "draft":
+        return "bg-gray-100 text-gray-800";
+      case "pending":
+        return "bg-orange-100 text-orange-800";
+      case "approved":
+        return "bg-green-100 text-green-800";
+      case "rejected":
+        return "bg-red-100 text-red-800";
       default:
-        return 'bg-gray-100 text-gray-800';
+        return "bg-gray-100 text-gray-800";
     }
   };
 
@@ -208,11 +231,11 @@ function HODPage() {
           <div className="bg-white rounded-lg border border-[#d1d5db] mb-6">
             <div className="flex border-b border-[#d1d5db]">
               <button
-                onClick={() => setActiveTab('drafts')}
+                onClick={() => setActiveTab("drafts")}
                 className={`px-6 py-3 text-sm font-medium ${
-                  activeTab === 'drafts'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-600 hover:text-gray-900'
+                  activeTab === "drafts"
+                    ? "text-blue-600 border-b-2 border-blue-600"
+                    : "text-gray-600 hover:text-gray-900"
                 }`}
               >
                 Draft Records
@@ -223,11 +246,11 @@ function HODPage() {
                 )}
               </button>
               <button
-                onClick={() => setActiveTab('pending')}
+                onClick={() => setActiveTab("pending")}
                 className={`px-6 py-3 text-sm font-medium ${
-                  activeTab === 'pending'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-600 hover:text-gray-900'
+                  activeTab === "pending"
+                    ? "text-blue-600 border-b-2 border-blue-600"
+                    : "text-gray-600 hover:text-gray-900"
                 }`}
               >
                 Pending Approval
@@ -238,11 +261,11 @@ function HODPage() {
                 )}
               </button>
               <button
-                onClick={() => setActiveTab('approved')}
+                onClick={() => setActiveTab("approved")}
                 className={`px-6 py-3 text-sm font-medium ${
-                  activeTab === 'approved'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-600 hover:text-gray-900'
+                  activeTab === "approved"
+                    ? "text-blue-600 border-b-2 border-blue-600"
+                    : "text-gray-600 hover:text-gray-900"
                 }`}
               >
                 Approved
@@ -253,11 +276,11 @@ function HODPage() {
                 )}
               </button>
               <button
-                onClick={() => setActiveTab('rejected')}
+                onClick={() => setActiveTab("rejected")}
                 className={`px-6 py-3 text-sm font-medium ${
-                  activeTab === 'rejected'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-gray-600 hover:text-gray-900'
+                  activeTab === "rejected"
+                    ? "text-blue-600 border-b-2 border-blue-600"
+                    : "text-gray-600 hover:text-gray-900"
                 }`}
               >
                 Rejected
@@ -271,7 +294,7 @@ function HODPage() {
           </div>
 
           {/* Draft Records Tab */}
-          {activeTab === 'drafts' && (
+          {activeTab === "drafts" && (
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
               <div className="p-4 border-b border-[#d1d5db]">
                 <h3 className="text-sm font-semibold text-[#1f2937] uppercase tracking-wide">
@@ -287,7 +310,8 @@ function HODPage() {
                 </div>
               ) : draftRecords.length === 0 ? (
                 <div className="p-8 text-center text-gray-500">
-                  No draft records. All records have been submitted for approval.
+                  No draft records. All records have been submitted for
+                  approval.
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -314,16 +338,23 @@ function HODPage() {
                             {record.hodApprovalDoc ? (
                               <div className="flex items-center gap-2">
                                 <button
-                                  onClick={() => setViewingDocument({
-                                    url: record.hodApprovalDoc!,
-                                    title: `HO Approval - ${record.companyName}`
-                                  })}
+                                  onClick={() =>
+                                    setViewingDocument({
+                                      url: record.hodApprovalDoc!,
+                                      title: `HO Approval - ${record.companyName}`,
+                                    })
+                                  }
                                   className="text-xs text-blue-600 hover:text-blue-800 underline"
                                 >
                                   View
                                 </button>
                                 <button
-                                  onClick={() => handleRemoveDocument(record.id, 'hodApprovalDoc')}
+                                  onClick={() =>
+                                    handleRemoveDocument(
+                                      record.id,
+                                      "hodApprovalDoc",
+                                    )
+                                  }
                                   className="text-xs text-red-600 hover:text-red-800"
                                 >
                                   Remove
@@ -334,13 +365,25 @@ function HODPage() {
                                 <input
                                   type="file"
                                   accept=".pdf,.jpg,.jpeg,.png"
-                                  onChange={(e) => handleFileUpload(e, record.id, 'hodApprovalDoc')}
-                                  disabled={uploadingDoc?.recordId === record.id && uploadingDoc?.field === 'hodApprovalDoc'}
+                                  onChange={(e) =>
+                                    handleFileUpload(
+                                      e,
+                                      record.id,
+                                      "hodApprovalDoc",
+                                    )
+                                  }
+                                  disabled={
+                                    uploadingDoc?.recordId === record.id &&
+                                    uploadingDoc?.field === "hodApprovalDoc"
+                                  }
                                   className="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                                 />
-                                {uploadingDoc?.recordId === record.id && uploadingDoc?.field === 'hodApprovalDoc' && (
-                                  <p className="text-xs text-blue-600">Uploading...</p>
-                                )}
+                                {uploadingDoc?.recordId === record.id &&
+                                  uploadingDoc?.field === "hodApprovalDoc" && (
+                                    <p className="text-xs text-blue-600">
+                                      Uploading...
+                                    </p>
+                                  )}
                               </div>
                             )}
                           </td>
@@ -348,16 +391,23 @@ function HODPage() {
                             {record.signedAgreementDoc ? (
                               <div className="flex items-center gap-2">
                                 <button
-                                  onClick={() => setViewingDocument({
-                                    url: record.signedAgreementDoc!,
-                                    title: `Signed Agreement - ${record.companyName}`
-                                  })}
+                                  onClick={() =>
+                                    setViewingDocument({
+                                      url: record.signedAgreementDoc!,
+                                      title: `Signed Agreement - ${record.companyName}`,
+                                    })
+                                  }
                                   className="text-xs text-blue-600 hover:text-blue-800 underline"
                                 >
                                   View
                                 </button>
                                 <button
-                                  onClick={() => handleRemoveDocument(record.id, 'signedAgreementDoc')}
+                                  onClick={() =>
+                                    handleRemoveDocument(
+                                      record.id,
+                                      "signedAgreementDoc",
+                                    )
+                                  }
                                   className="text-xs text-red-600 hover:text-red-800"
                                 >
                                   Remove
@@ -368,18 +418,33 @@ function HODPage() {
                                 <input
                                   type="file"
                                   accept=".pdf,.jpg,.jpeg,.png"
-                                  onChange={(e) => handleFileUpload(e, record.id, 'signedAgreementDoc')}
-                                  disabled={uploadingDoc?.recordId === record.id && uploadingDoc?.field === 'signedAgreementDoc'}
+                                  onChange={(e) =>
+                                    handleFileUpload(
+                                      e,
+                                      record.id,
+                                      "signedAgreementDoc",
+                                    )
+                                  }
+                                  disabled={
+                                    uploadingDoc?.recordId === record.id &&
+                                    uploadingDoc?.field === "signedAgreementDoc"
+                                  }
                                   className="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                                 />
-                                {uploadingDoc?.recordId === record.id && uploadingDoc?.field === 'signedAgreementDoc' && (
-                                  <p className="text-xs text-blue-600">Uploading...</p>
-                                )}
+                                {uploadingDoc?.recordId === record.id &&
+                                  uploadingDoc?.field ===
+                                    "signedAgreementDoc" && (
+                                    <p className="text-xs text-blue-600">
+                                      Uploading...
+                                    </p>
+                                  )}
                               </div>
                             )}
                           </td>
                           <td>
-                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded uppercase ${getStatusBadge(record.approvalStatus)}`}>
+                            <span
+                              className={`inline-flex px-2 py-1 text-xs font-medium rounded uppercase ${getStatusBadge(record.approvalStatus)}`}
+                            >
                               {record.approvalStatus}
                             </span>
                           </td>
@@ -393,7 +458,7 @@ function HODPage() {
           )}
 
           {/* Pending Approval Tab */}
-          {activeTab === 'pending' && (
+          {activeTab === "pending" && (
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
               <div className="p-4 border-b border-[#d1d5db]">
                 <h3 className="text-sm font-semibold text-[#1f2937] uppercase tracking-wide">
@@ -434,10 +499,12 @@ function HODPage() {
                           <td className="text-xs">{record.toDate}</td>
                           <td>
                             <button
-                              onClick={() => setViewingDocument({
-                                url: record.hodApprovalDoc!,
-                                title: `HO Approval - ${record.companyName}`
-                              })}
+                              onClick={() =>
+                                setViewingDocument({
+                                  url: record.hodApprovalDoc!,
+                                  title: `HO Approval - ${record.companyName}`,
+                                })
+                              }
                               className="text-xs text-blue-600 hover:text-blue-800 underline"
                             >
                               View Document
@@ -445,17 +512,21 @@ function HODPage() {
                           </td>
                           <td>
                             <button
-                              onClick={() => setViewingDocument({
-                                url: record.signedAgreementDoc!,
-                                title: `Signed Agreement - ${record.companyName}`
-                              })}
+                              onClick={() =>
+                                setViewingDocument({
+                                  url: record.signedAgreementDoc!,
+                                  title: `Signed Agreement - ${record.companyName}`,
+                                })
+                              }
                               className="text-xs text-blue-600 hover:text-blue-800 underline"
                             >
                               View Document
                             </button>
                           </td>
                           <td>
-                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded uppercase ${getStatusBadge(record.approvalStatus)}`}>
+                            <span
+                              className={`inline-flex px-2 py-1 text-xs font-medium rounded uppercase ${getStatusBadge(record.approvalStatus)}`}
+                            >
                               {record.approvalStatus}
                             </span>
                           </td>
@@ -469,7 +540,7 @@ function HODPage() {
           )}
 
           {/* Approved Records Tab */}
-          {activeTab === 'approved' && (
+          {activeTab === "approved" && (
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
               <div className="p-4 border-b border-[#d1d5db]">
                 <h3 className="text-sm font-semibold text-[#1f2937] uppercase tracking-wide">
@@ -509,16 +580,20 @@ function HODPage() {
                           <td className="text-xs">{record.fromDate}</td>
                           <td className="text-xs">{record.toDate}</td>
                           <td>
-                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded uppercase ${getStatusBadge(record.approvalStatus)}`}>
+                            <span
+                              className={`inline-flex px-2 py-1 text-xs font-medium rounded uppercase ${getStatusBadge(record.approvalStatus)}`}
+                            >
                               {record.approvalStatus}
                             </span>
                           </td>
                           <td>
                             <button
-                              onClick={() => setViewingDocument({
-                                url: record.hodApprovalDoc!,
-                                title: `HO Approval - ${record.companyName}`
-                              })}
+                              onClick={() =>
+                                setViewingDocument({
+                                  url: record.hodApprovalDoc!,
+                                  title: `HO Approval - ${record.companyName}`,
+                                })
+                              }
                               className="text-xs text-blue-600 hover:text-blue-800 underline"
                             >
                               View
@@ -526,10 +601,12 @@ function HODPage() {
                           </td>
                           <td>
                             <button
-                              onClick={() => setViewingDocument({
-                                url: record.signedAgreementDoc!,
-                                title: `Signed Agreement - ${record.companyName}`
-                              })}
+                              onClick={() =>
+                                setViewingDocument({
+                                  url: record.signedAgreementDoc!,
+                                  title: `Signed Agreement - ${record.companyName}`,
+                                })
+                              }
                               className="text-xs text-blue-600 hover:text-blue-800 underline"
                             >
                               View
@@ -545,7 +622,7 @@ function HODPage() {
           )}
 
           {/* Rejected Records Tab */}
-          {activeTab === 'rejected' && (
+          {activeTab === "rejected" && (
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
               <div className="p-4 border-b border-[#d1d5db]">
                 <h3 className="text-sm font-semibold text-[#1f2937] uppercase tracking-wide">
@@ -583,7 +660,9 @@ function HODPage() {
                           <td className="text-xs">{record.fromDate}</td>
                           <td className="text-xs">{record.toDate}</td>
                           <td>
-                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded uppercase ${getStatusBadge(record.approvalStatus)}`}>
+                            <span
+                              className={`inline-flex px-2 py-1 text-xs font-medium rounded uppercase ${getStatusBadge(record.approvalStatus)}`}
+                            >
                               {record.approvalStatus}
                             </span>
                           </td>

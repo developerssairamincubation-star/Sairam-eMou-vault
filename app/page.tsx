@@ -17,6 +17,7 @@ import {
   deleteEMoU,
   getEMoUsCount,
 } from "@/lib/firestore";
+import { uploadToCloudinary } from "@/lib/cloudinary";
 import { useRouter } from "next/navigation";
 
 function HomePage() {
@@ -171,8 +172,8 @@ function HomePage() {
         filters.searchTerm = debouncedSearchTerm;
       }
 
-      // Only show approved records for non-admin users
-      const approvalStatus = user?.role !== "admin" ? "approved" : undefined;
+      // Show only approved records for all users (including admin on main sheet)
+      const approvalStatus = "approved";
 
       const result = await getEMoUsPage(
         currentPage,
@@ -193,6 +194,9 @@ function HomePage() {
             r.id.toLowerCase().includes(term),
         );
       }
+
+      // Filter to only show records with at least one document uploaded
+      data = data.filter((r) => r.hodApprovalDoc || r.signedAgreementDoc);
 
       // Sort by department alphabetically (A-Z), then by ID sequential number
       data.sort((a, b) => {
@@ -221,7 +225,8 @@ function HomePage() {
     if (!user) return;
 
     try {
-      const approvalStatus = user?.role !== "admin" ? "approved" : undefined;
+      // Show only approved records stats for all users
+      const approvalStatus = "approved";
 
       // Get counts for different statuses
       const [total, active, expired, draft, renewal] = await Promise.all([
@@ -568,11 +573,17 @@ function HomePage() {
       if (selectedStatus !== "all") {
         filters.status = selectedStatus as FilterOptions["status"];
       }
-      const approvalStatus = user?.role !== "admin" ? "approved" : undefined;
+      const approvalStatus = "approved";
 
       // Fetch a large page for export (or implement a separate export endpoint)
       const result = await getEMoUsPage(1, 10000, filters, approvalStatus);
-      const csv = generateCSV(result.data);
+
+      // Filter to only export records with at least one document
+      const filteredData = result.data.filter(
+        (r) => r.hodApprovalDoc || r.signedAgreementDoc,
+      );
+
+      const csv = generateCSV(filteredData);
       downloadCSV(
         csv,
         `emou-records-${new Date().toISOString().split("T")[0]}.csv`,
@@ -673,23 +684,15 @@ function HomePage() {
 
     setUploadingDoc({ recordId, field });
     try {
-      const formData = new FormData();
-      formData.append("file", file);
+      const result = await uploadToCloudinary(file);
 
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error("Upload failed");
+      if (!result.success || !result.url) {
+        throw new Error(result.error || "Upload failed");
       }
-
-      const { url } = await response.json();
 
       // Update the record with the new document URL
       await updateEMoU(recordId, {
-        [field]: url,
+        [field]: result.url,
         updatedBy: user.uid,
         updatedByName: user.displayName,
         updatedAt: new Date(),
@@ -2014,8 +2017,8 @@ function HomePage() {
                           colSpan={33}
                           className="text-center py-8 text-[#6b7280]"
                         >
-                          No records found. Click &quot;+ New Record&quot; to
-                          add your first eMoU.
+                          No records found. Click &quot;+ New Mou&quot; to add
+                          your first eMoU.
                         </td>
                       </tr>
                     )}
