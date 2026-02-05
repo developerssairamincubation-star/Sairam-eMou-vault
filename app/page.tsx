@@ -19,6 +19,15 @@ import {
 } from "@/lib/firestore";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { useRouter } from "next/navigation";
+import {
+  FiUpload,
+  FiDownload,
+  FiPlus,
+  FiLogOut,
+  FiGrid,
+  FiList,
+} from "react-icons/fi";
+import { MdDashboard, MdAdminPanelSettings } from "react-icons/md";
 
 function HomePage() {
   const { user, signOut, canEdit, canDelete } = useAuth();
@@ -67,6 +76,7 @@ function HomePage() {
     recordId: string;
     field: "hodApprovalDoc" | "signedAgreementDoc";
   } | null>(null);
+  const [showAll, setShowAll] = useState(false);
 
   // Stats state for server-side calculation
   const [stats, setStats] = useState({
@@ -99,6 +109,7 @@ function HomePage() {
     selectedStatus,
     debouncedSearchTerm,
     user,
+    showAll,
   ]);
 
   // Debounce search term to avoid too many API calls
@@ -164,7 +175,10 @@ function HomePage() {
         filters.department = selectedDepartment as FilterOptions["department"];
       }
 
-      if (selectedStatus !== "all") {
+      // Special handling for "Expiring" - fetch Active records and filter client-side
+      if (selectedStatus === "Expiring") {
+        filters.status = "Active";
+      } else if (selectedStatus !== "all") {
         filters.status = selectedStatus as FilterOptions["status"];
       }
 
@@ -176,8 +190,8 @@ function HomePage() {
       const approvalStatus = "approved";
 
       const result = await getEMoUsPage(
-        currentPage,
-        itemsPerPage,
+        showAll ? 1 : currentPage,
+        showAll ? 10000 : itemsPerPage,
         filters,
         approvalStatus,
       );
@@ -193,6 +207,35 @@ function HomePage() {
             r.description.toLowerCase().includes(term) ||
             r.id.toLowerCase().includes(term),
         );
+      }
+
+      // Filter for expiring records (within 2 months)
+      if (selectedStatus === "Expiring") {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const twoMonthsFromNow = new Date(today);
+        twoMonthsFromNow.setMonth(twoMonthsFromNow.getMonth() + 2);
+
+        data = data.filter((record) => {
+          if (
+            !record.toDate ||
+            record.toDate.toLowerCase().includes("perpetual") ||
+            record.toDate.toLowerCase().includes("indefinite")
+          ) {
+            return false;
+          }
+
+          try {
+            const toDate = parseDate(record.toDate);
+            toDate.setHours(0, 0, 0, 0);
+
+            // Record is expiring if toDate is between today and 2 months from now
+            return toDate > today && toDate <= twoMonthsFromNow;
+          } catch (e) {
+            return false;
+          }
+        });
       }
 
       // Filter to only show records with at least one document uploaded
@@ -278,10 +321,58 @@ function HomePage() {
         ),
       ]);
 
+      // Calculate expiring records (Active records expiring within 2 months)
+      let expiringCount = 0;
+      try {
+        const filters: FilterOptions = {
+          status: "Active",
+        };
+        if (selectedDepartment !== "all") {
+          filters.department =
+            selectedDepartment as FilterOptions["department"];
+        }
+
+        // Fetch active records to check expiration dates
+        const activeRecords = await getEMoUsPage(
+          1,
+          10000,
+          filters,
+          approvalStatus,
+        );
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const twoMonthsFromNow = new Date(today);
+        twoMonthsFromNow.setMonth(twoMonthsFromNow.getMonth() + 2);
+
+        expiringCount = activeRecords.data.filter((record) => {
+          if (
+            !record.toDate ||
+            record.toDate.toLowerCase().includes("perpetual") ||
+            record.toDate.toLowerCase().includes("indefinite")
+          ) {
+            return false;
+          }
+
+          try {
+            const toDate = parseDate(record.toDate);
+            toDate.setHours(0, 0, 0, 0);
+
+            // Record is expiring if toDate is between today and 2 months from now
+            return toDate > today && toDate <= twoMonthsFromNow;
+          } catch (e) {
+            return false;
+          }
+        }).length;
+      } catch (error) {
+        console.error("Failed to calculate expiring records:", error);
+      }
+
       setStats({
         total,
         active,
-        expiring: 0, // This requires date calculation, keeping simplified for now
+        expiring: expiringCount,
         expired,
         draft,
         renewal,
@@ -814,51 +905,57 @@ function HomePage() {
                 </div>
                 <button
                   onClick={() => router.push("/dashboard")}
-                  className="btn btn-secondary"
+                  className="btn btn-secondary flex items-center gap-2"
                 >
-                  Dashboard
+                  <MdDashboard /> Dashboard
                 </button>
                 {user?.role === "admin" && (
                   <button
                     onClick={() => router.push("/admin")}
-                    className="btn btn-secondary"
+                    className="btn btn-secondary flex items-center gap-2"
                   >
-                    Admin
+                    <MdAdminPanelSettings /> Admin
                   </button>
                 )}
                 {user?.role === "master" && (
                   <button
                     onClick={() => router.push("/admin")}
-                    className="btn btn-secondary"
+                    className="btn btn-secondary flex items-center gap-2"
                   >
-                    Approvals
+                    <MdAdminPanelSettings /> Approvals
                   </button>
                 )}
                 {user?.role === "hod" && (
                   <button
                     onClick={() => router.push("/hod")}
-                    className="btn btn-secondary"
+                    className="btn btn-secondary flex items-center gap-2"
                   >
-                    HOD Dashboard
+                    <MdDashboard /> HOD Dashboard
                   </button>
                 )}
-                <button onClick={handleExport} className="btn btn-secondary">
-                  Export
+                <button
+                  onClick={handleExport}
+                  className="btn btn-secondary flex items-center gap-2"
+                >
+                  <FiDownload /> Export
                 </button>
                 <button
                   onClick={() => setShowImportDialog(true)}
-                  className="btn btn-secondary"
+                  className="btn btn-secondary flex items-center gap-2"
                 >
-                  Import
+                  <FiUpload /> Import
                 </button>
                 <button
                   onClick={() => setShowForm(true)}
-                  className="btn btn-primary"
+                  className="btn btn-primary flex items-center gap-2"
                 >
-                  + New MOU
+                  <FiPlus /> New MOU
                 </button>
-                <button onClick={signOut} className="btn btn-secondary">
-                  Logout
+                <button
+                  onClick={signOut}
+                  className="btn btn-secondary flex items-center gap-2"
+                >
+                  <FiLogOut /> Logout
                 </button>
               </div>
             </div>
@@ -910,7 +1007,19 @@ function HomePage() {
             </div>
             <div className="flex items-center gap-3">
               <div className="text-xs text-[#6b7280]">{totalCount} records</div>
-              {totalCount > 0 && (
+              {totalCount > itemsPerPage && (
+                <button
+                  onClick={() => {
+                    setShowAll(!showAll);
+                    setCurrentPage(1);
+                  }}
+                  className="px-3 py-1.5 text-xs border border-[#3b82f6] bg-[#3b82f6] text-white rounded hover:bg-[#2563eb] cursor-pointer flex items-center gap-1.5"
+                >
+                  {showAll ? <FiList /> : <FiGrid />}
+                  {showAll ? "Show Paginated" : "Show All"}
+                </button>
+              )}
+              {totalCount > 0 && !showAll && (
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() =>
@@ -1857,7 +1966,7 @@ function HomePage() {
                                       title: `HO Approval - ${record.companyName}`,
                                     })
                                   }
-                                  className="text-blue-600 hover:underline cursor-pointer"
+                                  className="text-blue-600 hover:underline cursor-pointer text-xs"
                                 >
                                   View
                                 </button>
@@ -1867,14 +1976,16 @@ function HomePage() {
                                   {record.hodApprovalDoc && (
                                     <span className="text-gray-300">|</span>
                                   )}
-                                  <label className="cursor-pointer text-green-600 hover:text-green-800 relative">
+                                  <label className="cursor-pointer px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-1 text-xs">
                                     {uploadingDoc?.recordId === record.id &&
                                     uploadingDoc?.field === "hodApprovalDoc" ? (
-                                      <span className="text-xs">
+                                      <span className="flex items-center gap-1">
+                                        <div className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
                                         Uploading...
                                       </span>
                                     ) : (
-                                      <span className="text-xs">
+                                      <span className="flex items-center gap-1">
+                                        <FiUpload />
                                         {record.hodApprovalDoc
                                           ? "Replace"
                                           : "Upload"}
@@ -1919,7 +2030,7 @@ function HomePage() {
                                       title: `Signed Agreement - ${record.companyName}`,
                                     })
                                   }
-                                  className="text-blue-600 hover:underline cursor-pointer"
+                                  className="text-blue-600 hover:underline cursor-pointer text-xs"
                                 >
                                   View
                                 </button>
@@ -1929,15 +2040,17 @@ function HomePage() {
                                   {record.signedAgreementDoc && (
                                     <span className="text-gray-300">|</span>
                                   )}
-                                  <label className="cursor-pointer text-green-600 hover:text-green-800 relative">
+                                  <label className="cursor-pointer px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-1 text-xs">
                                     {uploadingDoc?.recordId === record.id &&
                                     uploadingDoc?.field ===
                                       "signedAgreementDoc" ? (
-                                      <span className="text-xs">
+                                      <span className="flex items-center gap-1">
+                                        <div className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
                                         Uploading...
                                       </span>
                                     ) : (
-                                      <span className="text-xs">
+                                      <span className="flex items-center gap-1">
+                                        <FiUpload />
                                         {record.signedAgreementDoc
                                           ? "Replace"
                                           : "Upload"}
