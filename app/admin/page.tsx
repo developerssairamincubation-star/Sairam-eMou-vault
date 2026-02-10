@@ -356,7 +356,16 @@ function AdminPage() {
       // Auto-update status when toDate changes
       if (field === "toDate" && typeof value === "string") {
         const dateStr = value.toLowerCase();
-        if (dateStr === "perpetual" || dateStr === "indefinite") {
+        // Check for perpetual text or large year dates
+        const parts = value.split(".");
+        const isLargeYear =
+          parts.length === 3 && parseInt(parts[2], 10) >= 9000;
+
+        if (
+          dateStr === "perpetual" ||
+          dateStr === "indefinite" ||
+          isLargeYear
+        ) {
           updates.status = "Active" as EMoUStatus;
         } else {
           const parts = value.split(".");
@@ -753,17 +762,22 @@ function AdminPage() {
       return "Draft";
     }
 
+    // Check if toDate is perpetual - always show Active for perpetual dates
+    const toDate = record.toDate;
+    if (
+      toDate &&
+      (toDate.toLowerCase().includes("perpetual") ||
+        toDate.toLowerCase().includes("indefinite") ||
+        isPerpetualDate(toDate))
+    ) {
+      return "Active";
+    }
+
     // If not Active, return as-is
     if (record.status !== "Active") return record.status;
 
     // Check if Active record is expiring
-    const toDate = record.toDate;
-    if (
-      !toDate ||
-      toDate.toLowerCase().includes("perpetual") ||
-      toDate.toLowerCase().includes("indefinite") ||
-      isPerpetualDate(toDate)
-    ) {
+    if (!toDate) {
       return "Active";
     }
 

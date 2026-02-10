@@ -315,7 +315,7 @@ function HomePage() {
       const approvalStatus = "approved";
 
       // Get counts for different statuses
-      const [total, active, expired, draft, renewal] = await Promise.all([
+      const [total, active, expired, draft] = await Promise.all([
         getEMoUsCount(
           selectedDepartment !== "all"
             ? { department: selectedDepartment as FilterOptions["department"] }
@@ -349,16 +349,6 @@ function HomePage() {
                 ? (selectedDepartment as FilterOptions["department"])
                 : undefined,
             status: "Draft",
-          },
-          approvalStatus,
-        ),
-        getEMoUsCount(
-          {
-            department:
-              selectedDepartment !== "all"
-                ? (selectedDepartment as FilterOptions["department"])
-                : undefined,
-            status: "Renewal Pending",
           },
           approvalStatus,
         ),
@@ -419,8 +409,9 @@ function HomePage() {
         console.error("Failed to calculate expiring records:", error);
       }
 
-      // Calculate withDocs count from all approved records
+      // Calculate withDocs count and renewal count from all approved records
       let withDocsCount = 0;
+      let renewalCount = 0;
       try {
         const allApprovedFilters: FilterOptions = {};
         if (selectedDepartment !== "all") {
@@ -436,6 +427,9 @@ function HomePage() {
         withDocsCount = allApproved.data.filter(
           (r) => r.hodApprovalDoc || r.signedAgreementDoc,
         ).length;
+        renewalCount = allApproved.data.filter(
+          (r) => r.goingForRenewal === "Yes",
+        ).length;
       } catch (error) {
         console.error("Failed to calculate withDocs count:", error);
       }
@@ -446,7 +440,7 @@ function HomePage() {
         expiring: expiringCount,
         expired,
         draft,
-        renewal,
+        renewal: renewalCount,
         withDocs: withDocsCount,
       });
     } catch (error) {
@@ -610,9 +604,15 @@ function HomePage() {
 
       // Auto-update status when toDate changes
       if (field === "toDate" && typeof value === "string") {
+        // Check for perpetual text or large year dates
+        const parts = value.split(".");
+        const isLargeYear =
+          parts.length === 3 && parseInt(parts[2], 10) >= 9000;
+
         if (
           value.toLowerCase().includes("perpetual") ||
-          value.toLowerCase().includes("indefinite")
+          value.toLowerCase().includes("indefinite") ||
+          isLargeYear
         ) {
           updated.status = "Active";
         } else {
@@ -683,9 +683,15 @@ function HomePage() {
 
       // Auto-update status when toDate changes
       if (field === "toDate" && typeof value === "string") {
+        // Check for perpetual text or large year dates
+        const parts = value.split(".");
+        const isLargeYear =
+          parts.length === 3 && parseInt(parts[2], 10) >= 9000;
+
         if (
           value.toLowerCase().includes("perpetual") ||
-          value.toLowerCase().includes("indefinite")
+          value.toLowerCase().includes("indefinite") ||
+          isLargeYear
         ) {
           updates.status = "Active";
         } else {
@@ -959,15 +965,22 @@ function HomePage() {
 
   // Calculate display status - shows "Expiring" instead of "Active" for records expiring within 2 months
   const getDisplayStatus = (record: EMoURecord): string => {
-    if (record.status !== "Active") return record.status;
-
+    // Check if toDate is perpetual - always show Active for perpetual dates
     const toDate = record.toDate;
     if (
-      !toDate ||
-      toDate.toLowerCase().includes("perpetual") ||
-      toDate.toLowerCase().includes("indefinite") ||
-      isPerpetualDate(toDate)
+      toDate &&
+      (toDate.toLowerCase().includes("perpetual") ||
+        toDate.toLowerCase().includes("indefinite") ||
+        isPerpetualDate(toDate))
     ) {
+      return "Active";
+    }
+
+    // If not Active, return as-is
+    if (record.status !== "Active") return record.status;
+
+    // Check if Active record is expiring
+    if (!toDate) {
       return "Active";
     }
 

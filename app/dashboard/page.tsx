@@ -73,6 +73,64 @@ const DEPT_COLORS = [
   "#78716c",
 ];
 
+// Check if a date has a very large year (like 9999) - treat as perpetual
+const isPerpetualDate = (dateStr: string): boolean => {
+  if (!dateStr) return false;
+  const parts = dateStr.split(".");
+  if (parts.length === 3) {
+    const year = parseInt(parts[2], 10);
+    return year >= 9000; // Years 9000+ are treated as perpetual
+  }
+  return false;
+};
+
+// Helper function to parse date in DD.MM.YYYY format
+const parseDate = (dateStr: string): Date => {
+  const [day, month, year] = dateStr.split(".").map(Number);
+  return new Date(year, month - 1, day);
+};
+
+// Get display status - perpetual dates are always Active, also calculates "Expiring" for near-expiry records
+const getDisplayStatus = (record: EMoURecord): string => {
+  const toDate = record.toDate;
+  // Check if toDate is perpetual - always show Active for perpetual dates
+  if (
+    toDate &&
+    (toDate.toLowerCase().includes("perpetual") ||
+      toDate.toLowerCase().includes("indefinite") ||
+      isPerpetualDate(toDate))
+  ) {
+    return "Active";
+  }
+
+  // If not Active, return as-is (Expired, Renewal Pending, Draft, etc.)
+  if (record.status !== "Active") return record.status;
+
+  // Check if Active record is expiring (within 2 months)
+  if (!toDate) {
+    return "Active";
+  }
+
+  try {
+    const parsedDate = parseDate(toDate);
+    parsedDate.setHours(0, 0, 0, 0);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const twoMonthsFromNow = new Date(today);
+    twoMonthsFromNow.setMonth(twoMonthsFromNow.getMonth() + 2);
+
+    // If expiry date is between today and 2 months from now, show "Expiring"
+    if (parsedDate > today && parsedDate <= twoMonthsFromNow) {
+      return "Expiring";
+    }
+    return "Active";
+  } catch {
+    return "Active";
+  }
+};
+
 interface DepartmentStats {
   name: string;
   count: number;
@@ -117,10 +175,11 @@ export default function Dashboard() {
   // Calculate statistics
   const stats = {
     total: records.length,
-    active: records.filter((r) => r.status === "Active").length,
-    expired: records.filter((r) => r.status === "Expired").length,
-    renewal: records.filter((r) => r.status === "Renewal Pending").length,
-    draft: records.filter((r) => r.status === "Draft").length,
+    active: records.filter((r) => getDisplayStatus(r) === "Active").length,
+    expiring: records.filter((r) => getDisplayStatus(r) === "Expiring").length,
+    expired: records.filter((r) => getDisplayStatus(r) === "Expired").length,
+    renewal: records.filter((r) => r.goingForRenewal === "Yes").length,
+    draft: records.filter((r) => getDisplayStatus(r) === "Draft").length,
     totalPlacement: records.reduce(
       (sum, r) => sum + (r.placementOpportunity || 0),
       0,
@@ -143,7 +202,7 @@ export default function Dashboard() {
       const dept = record.department || "Uncategorized";
       const current = deptMap.get(dept) || { count: 0, active: 0 };
       current.count++;
-      if (record.status === "Active") current.active++;
+      if (getDisplayStatus(record) === "Active") current.active++;
       deptMap.set(dept, current);
     });
     return Array.from(deptMap.entries())
@@ -158,6 +217,7 @@ export default function Dashboard() {
       [key: string]: {
         count: number;
         active: number;
+        expiring: number;
         expired: number;
         renewal: number;
         draft: number;
@@ -170,6 +230,7 @@ export default function Dashboard() {
       yearData[year] = {
         count: 0,
         active: 0,
+        expiring: 0,
         expired: 0,
         renewal: 0,
         draft: 0,
@@ -185,12 +246,13 @@ export default function Dashboard() {
           if (parts.length === 3) {
             const year = parseInt(parts[2]);
             if (yearData[year] !== undefined) {
+              const status = getDisplayStatus(record);
               yearData[year].count++;
-              if (record.status === "Active") yearData[year].active++;
-              else if (record.status === "Expired") yearData[year].expired++;
-              else if (record.status === "Renewal Pending")
-                yearData[year].renewal++;
-              else if (record.status === "Draft") yearData[year].draft++;
+              if (status === "Active") yearData[year].active++;
+              else if (status === "Expiring") yearData[year].expiring++;
+              else if (status === "Expired") yearData[year].expired++;
+              if (record.goingForRenewal === "Yes") yearData[year].renewal++;
+              if (status === "Draft") yearData[year].draft++;
             }
           }
         } catch (e) {
@@ -205,6 +267,7 @@ export default function Dashboard() {
         year: year.toString(),
         count: yearData[year].count,
         active: yearData[year].active,
+        expiring: yearData[year].expiring,
         expired: yearData[year].expired,
         renewal: yearData[year].renewal,
         draft: yearData[year].draft,
@@ -220,6 +283,7 @@ export default function Dashboard() {
       [key: string]: {
         count: number;
         active: number;
+        expiring: number;
         expired: number;
         renewal: number;
       };
@@ -241,7 +305,13 @@ export default function Dashboard() {
       "Dec",
     ];
     months.forEach((month) => {
-      monthData[month] = { count: 0, active: 0, expired: 0, renewal: 0 };
+      monthData[month] = {
+        count: 0,
+        active: 0,
+        expiring: 0,
+        expired: 0,
+        renewal: 0,
+      };
     });
 
     // Count records for current year based on fromDate
@@ -258,11 +328,12 @@ export default function Dashboard() {
             if (year === currentYear) {
               const monthKey = months[month];
               if (monthKey && monthData[monthKey]) {
+                const status = getDisplayStatus(record);
                 monthData[monthKey].count++;
-                if (record.status === "Active") monthData[monthKey].active++;
-                else if (record.status === "Expired")
-                  monthData[monthKey].expired++;
-                else if (record.status === "Renewal Pending")
+                if (status === "Active") monthData[monthKey].active++;
+                else if (status === "Expiring") monthData[monthKey].expiring++;
+                else if (status === "Expired") monthData[monthKey].expired++;
+                if (record.goingForRenewal === "Yes")
                   monthData[monthKey].renewal++;
               }
             }
@@ -277,6 +348,7 @@ export default function Dashboard() {
       month,
       count: monthData[month].count,
       active: monthData[month].active,
+      expiring: monthData[month].expiring,
       expired: monthData[month].expired,
       renewal: monthData[month].renewal,
     }));
@@ -325,6 +397,7 @@ export default function Dashboard() {
   // Status distribution for pie chart
   const statusData = [
     { name: "Active", value: stats.active, color: "#10b981" },
+    { name: "Expiring", value: stats.expiring, color: "#eab308" },
     { name: "Expired", value: stats.expired, color: "#ef4444" },
     { name: "Renewal", value: stats.renewal, color: "#f59e0b" },
     { name: "Draft", value: stats.draft, color: "#6b7280" },
@@ -416,7 +489,7 @@ export default function Dashboard() {
                 onClick={(e) =>
                   showRecords(
                     "Active eMoUs",
-                    records.filter((r) => r.status === "Active"),
+                    records.filter((r) => getDisplayStatus(r) === "Active"),
                     "active",
                     e,
                   )
@@ -451,7 +524,7 @@ export default function Dashboard() {
                 onClick={(e) =>
                   showRecords(
                     "Expired eMoUs",
-                    records.filter((r) => r.status === "Expired"),
+                    records.filter((r) => getDisplayStatus(r) === "Expired"),
                     "expired",
                     e,
                   )
@@ -486,7 +559,9 @@ export default function Dashboard() {
                 onClick={(e) =>
                   showRecords(
                     "Renewal Pending eMoUs",
-                    records.filter((r) => r.status === "Renewal Pending"),
+                    records.filter(
+                      (r) => getDisplayStatus(r) === "Renewal Pending",
+                    ),
                     "renewal",
                     e,
                   )
@@ -547,7 +622,9 @@ export default function Dashboard() {
                     <div className="text-xl font-bold text-purple-600">
                       {stats.totalPlacement}
                     </div>
-                    <div className="text-[10px] text-gray-600">Total No of Students Placed</div>
+                    <div className="text-[10px] text-gray-600">
+                      Total No of Students Placed
+                    </div>
                   </div>
                 </div>
               </div>
@@ -582,7 +659,9 @@ export default function Dashboard() {
                     <div className="text-xl font-bold text-indigo-600">
                       {stats.totalInternship}
                     </div>
-                    <div className="text-[10px] text-gray-600">Total No of Students Interned</div>
+                    <div className="text-[10px] text-gray-600">
+                      Total No of Students Interned
+                    </div>
                   </div>
                 </div>
               </div>
@@ -591,7 +670,7 @@ export default function Dashboard() {
                 onClick={(e) =>
                   showRecords(
                     "Draft eMoUs",
-                    records.filter((r) => r.status === "Draft"),
+                    records.filter((r) => getDisplayStatus(r) === "Draft"),
                     "draft",
                     e,
                   )
