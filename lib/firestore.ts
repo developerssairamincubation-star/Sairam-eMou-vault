@@ -53,7 +53,9 @@ function getShortDeptCode(department: DepartmentCode): string {
     'CYBERSECURITY': 'SC',
     'IOT': 'CI',
     'EICE': 'IX',
-    'CSE MTECH' : 'CJ',
+    'CSE MTECH': 'CJ',
+    'Institution': 'IN',
+    'Incubation': 'IB',
   };
   return deptCodeMap[department] || department.slice(0, 2);
 }

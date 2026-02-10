@@ -84,7 +84,6 @@ export default function Dashboard() {
       (sum, r) => sum + (r.internshipOpportunity || 0),
       0,
     ),
-    avgPerDept: "0",
   };
 
   // Department statistics
@@ -101,12 +100,6 @@ export default function Dashboard() {
       .map(([name, data]) => ({ name, ...data }))
       .sort((a, b) => b.count - a.count);
   })();
-
-  if (departmentStats.length > 0) {
-    stats.avgPerDept = Math.round(
-      stats.total / departmentStats.length,
-    ).toString();
-  }
 
   const topDepartments = departmentStats.slice(0, 10);
 
@@ -576,31 +569,6 @@ export default function Dashboard() {
                   </div>
                 </div>
               </div>
-              <div className="bg-white rounded-lg p-3 border border-gray-200">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-amber-100 rounded flex items-center justify-center">
-                    <svg
-                      className="w-4 h-4 text-amber-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                      />
-                    </svg>
-                  </div>
-                  <div>
-                    <div className="text-xl font-bold text-amber-600">
-                      {stats.avgPerDept}
-                    </div>
-                    <div className="text-[10px] text-gray-600">Avg/Dept</div>
-                  </div>
-                </div>
-              </div>
             </div>
 
             {/* Row 2: Yearly Trends + Pie Chart + Radar */}
@@ -935,14 +903,6 @@ export default function Dashboard() {
                     </div>
                     <div className="text-[10px] text-indigo-600 font-medium">
                       Opportunities
-                    </div>
-                  </div>
-                  <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded p-2 border border-gray-200">
-                    <div className="text-2xl font-bold text-gray-700">
-                      {stats.avgPerDept}
-                    </div>
-                    <div className="text-[10px] text-gray-600 font-medium">
-                      Avg eMoUs
                     </div>
                   </div>
                 </div>

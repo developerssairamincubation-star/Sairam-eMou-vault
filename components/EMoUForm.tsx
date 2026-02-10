@@ -10,7 +10,7 @@ import {
   MaintainedBy,
 } from "@/types";
 import { useAuth } from "@/context/AuthContext";
-import { uploadToCloudinary } from "@/lib/cloudinary";
+import { uploadToCloudinary, deleteFromCloudinary } from "@/lib/cloudinary";
 
 interface EMoUFormProps {
   initialData?: EMoURecord;
@@ -62,8 +62,28 @@ const getShortDeptCode = (department: DepartmentCode): string => {
     IOT: "CI",
     EICE: "IX",
     "CSE MTECH": "CJ",
+    Institution: "IN",
+    Incubation: "IB",
   };
   return deptCodeMap[department] || department.slice(0, 2);
+};
+
+// Convert DD.MM.YYYY to YYYY-MM-DD for HTML date input
+const toInputDate = (ddmmyyyy: string): string => {
+  if (!ddmmyyyy) return "";
+  const parts = ddmmyyyy.split(".");
+  if (parts.length !== 3) return "";
+  const [day, month, year] = parts;
+  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+};
+
+// Convert YYYY-MM-DD from HTML date input to DD.MM.YYYY
+const toDisplayDate = (yyyymmdd: string): string => {
+  if (!yyyymmdd) return "";
+  const parts = yyyymmdd.split("-");
+  if (parts.length !== 3) return "";
+  const [year, month, day] = parts;
+  return `${day}.${month}.${year}`;
 };
 
 export default function EMoUForm({
@@ -71,7 +91,7 @@ export default function EMoUForm({
   onSubmit,
   onCancel,
 }: EMoUFormProps) {
-  const { user } = useAuth();
+  const { user, firebaseUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [uploadingHOD, setUploadingHOD] = useState(false);
   const [uploadingAgreement, setUploadingAgreement] = useState(false);
@@ -153,6 +173,13 @@ export default function EMoUForm({
     if (fieldName === "signedAgreementDoc") setUploadingAgreement(true);
 
     try {
+      // Delete old file from Cloudinary if replacing
+      const oldUrl = formData[fieldName];
+      if (oldUrl && firebaseUser) {
+        const idToken = await firebaseUser.getIdToken();
+        await deleteFromCloudinary(oldUrl, idToken);
+      }
+
       const url = await doCloudinaryUpload(file);
       setFormData({ ...formData, [fieldName]: url });
       setShowAlert({ message: "File uploaded successfully!", type: "success" });
@@ -394,29 +421,43 @@ export default function EMoUForm({
             </div>
             <div>
               <label className="block text-xs font-medium text-[#4b5563] mb-1">
-                Company Relationship (1-5)
+                Company Relationship
               </label>
-              <select
-                value={formData.companyRelationship}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    companyRelationship: parseInt(e.target.value) as
-                      | 1
-                      | 2
-                      | 3
-                      | 4
-                      | 5,
-                  })
-                }
-                className="w-full"
-              >
-                <option value={1}>1 - Poor</option>
-                <option value={2}>2 - Fair</option>
-                <option value={3}>3 - Good</option>
-                <option value={4}>4 - Very Good</option>
-                <option value={5}>5 - Excellent</option>
-              </select>
+              <div className="flex items-center gap-1 mt-1">
+                {([1, 2, 3, 4, 5] as const).map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    onClick={() =>
+                      setFormData({ ...formData, companyRelationship: star })
+                    }
+                    className="p-0.5 focus:outline-none transition-colors"
+                    title={
+                      ["Poor", "Fair", "Good", "Very Good", "Excellent"][
+                        star - 1
+                      ]
+                    }
+                  >
+                    <svg
+                      className={`w-6 h-6 ${
+                        star <= formData.companyRelationship
+                          ? "text-yellow-400 fill-yellow-400"
+                          : "text-gray-300 fill-gray-300"
+                      }`}
+                      viewBox="0 0 20 20"
+                    >
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                  </button>
+                ))}
+                <span className="ml-2 text-xs text-[#6b7280]">
+                  {
+                    ["Poor", "Fair", "Good", "Very Good", "Excellent"][
+                      formData.companyRelationship - 1
+                    ]
+                  }
+                </span>
+              </div>
             </div>
             <div className="col-span-2">
               <label className="block text-xs font-medium text-[#4b5563] mb-1">
@@ -457,35 +498,46 @@ export default function EMoUForm({
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-medium text-[#4b5563] mb-1">
-                From Date (DD.MM.YYYY) <span className="text-red-500">*</span>
+                From Date <span className="text-red-500">*</span>
               </label>
               <input
-                type="text"
-                value={formData.fromDate}
+                type="date"
+                value={toInputDate(formData.fromDate)}
                 onChange={(e) =>
-                  setFormData({ ...formData, fromDate: e.target.value })
+                  setFormData({
+                    ...formData,
+                    fromDate: toDisplayDate(e.target.value),
+                  })
                 }
                 required
-                placeholder="01.01.2024"
-                pattern="\d{2}\.\d{2}\.\d{4}"
                 className="w-full"
               />
+              {formData.fromDate && (
+                <p className="text-xs text-[#6b7280] mt-1">
+                  {formData.fromDate}
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-[#4b5563] mb-1">
-                To Date (DD.MM.YYYY) <span className="text-red-500">*</span>
+                To Date <span className="text-red-500">*</span>
               </label>
               <input
-                type="text"
-                value={formData.toDate}
+                type="date"
+                value={toInputDate(formData.toDate)}
                 onChange={(e) =>
-                  setFormData({ ...formData, toDate: e.target.value })
+                  setFormData({
+                    ...formData,
+                    toDate: toDisplayDate(e.target.value),
+                  })
                 }
                 required
-                placeholder="31.12.2024"
-                pattern="\d{2}\.\d{2}\.\d{4}"
+                min={toInputDate(formData.fromDate) || undefined}
                 className="w-full"
               />
+              {formData.toDate && (
+                <p className="text-xs text-[#6b7280] mt-1">{formData.toDate}</p>
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-[#4b5563] mb-1">
@@ -514,108 +566,137 @@ export default function EMoUForm({
           <h3 className="text-sm font-semibold text-[#1f2937] mb-4 uppercase tracking-wide">
             Contact Details
           </h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
-              <label className="block text-xs font-medium text-[#4b5563] mb-1">
-                Name of Industry Contact Person
-              </label>
-              <input
-                type="text"
-                value={formData.industryContactName}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    industryContactName: e.target.value,
-                  })
-                }
-                className="w-full"
-                placeholder="Full name of industry representative"
-              />
+
+          {/* Industry Contact */}
+          <div className="mb-4">
+            <p className="text-xs font-medium text-[#9ca3af] mb-2 uppercase tracking-wider">
+              Industry Contact
+            </p>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-[#4b5563] mb-1">
+                  Contact Person Name
+                </label>
+                <input
+                  type="text"
+                  value={formData.industryContactName}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      industryContactName: e.target.value,
+                    })
+                  }
+                  className="w-full"
+                  placeholder="Full name"
+                  autoComplete="name"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#4b5563] mb-1">
+                  Mobile Number
+                </label>
+                <input
+                  type="tel"
+                  value={formData.industryContactMobile}
+                  onChange={(e) => {
+                    // Allow only digits, +, spaces, and hyphens
+                    const value = e.target.value.replace(/[^\d+\s-]/g, "");
+                    setFormData({
+                      ...formData,
+                      industryContactMobile: value,
+                    });
+                  }}
+                  className="w-full"
+                  placeholder="+91 98765 43210"
+                  pattern="[+]?[0-9\s-]{10,15}"
+                  title="Enter a valid phone number (10-15 digits)"
+                  autoComplete="tel"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#4b5563] mb-1">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  value={formData.industryContactEmail}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      industryContactEmail: e.target.value,
+                    })
+                  }
+                  className="w-full"
+                  placeholder="contact@company.com"
+                  autoComplete="email"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-[#4b5563] mb-1">
-                Industry Contact Mobile
-              </label>
-              <input
-                type="tel"
-                value={formData.industryContactMobile}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    industryContactMobile: e.target.value,
-                  })
-                }
-                className="w-full"
-                placeholder="+91 XXXXXXXXXX"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-[#4b5563] mb-1">
-                Industry Contact Email
-              </label>
-              <input
-                type="email"
-                value={formData.industryContactEmail}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    industryContactEmail: e.target.value,
-                  })
-                }
-                className="w-full"
-                placeholder="contact@company.com"
-              />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-xs font-medium text-[#4b5563] mb-1">
-                Name of Institution Contact Person
-              </label>
-              <input
-                type="text"
-                value={formData.institutionContactName}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    institutionContactName: e.target.value,
-                  })
-                }
-                className="w-full"
-                placeholder="Full name of faculty/staff representative"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-[#4b5563] mb-1">
-                Institution Contact Mobile
-              </label>
-              <input
-                type="tel"
-                value={formData.institutionContactMobile}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    institutionContactMobile: e.target.value,
-                  })
-                }
-                className="w-full"
-                placeholder="+91 XXXXXXXXXX"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-[#4b5563] mb-1">
-                Institution Contact Email
-              </label>
-              <input
-                type="email"
-                value={formData.institutionContactEmail}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    institutionContactEmail: e.target.value,
-                  })
-                }
-                className="w-full"
-                placeholder="faculty@sairam.edu.in"
-              />
+          </div>
+
+          {/* Institution Contact */}
+          <div>
+            <p className="text-xs font-medium text-[#9ca3af] mb-2 uppercase tracking-wider">
+              Institution Contact
+            </p>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-[#4b5563] mb-1">
+                  Contact Person Name
+                </label>
+                <input
+                  type="text"
+                  value={formData.institutionContactName}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      institutionContactName: e.target.value,
+                    })
+                  }
+                  className="w-full"
+                  placeholder="Full name"
+                  autoComplete="name"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#4b5563] mb-1">
+                  Mobile Number
+                </label>
+                <input
+                  type="tel"
+                  value={formData.institutionContactMobile}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/[^\d+\s-]/g, "");
+                    setFormData({
+                      ...formData,
+                      institutionContactMobile: value,
+                    });
+                  }}
+                  className="w-full"
+                  placeholder="+91 98765 43210"
+                  pattern="[+]?[0-9\s-]{10,15}"
+                  title="Enter a valid phone number (10-15 digits)"
+                  autoComplete="tel"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#4b5563] mb-1">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  value={formData.institutionContactEmail}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      institutionContactEmail: e.target.value,
+                    })
+                  }
+                  className="w-full"
+                  placeholder="faculty@sairam.edu.in"
+                  autoComplete="email"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -697,54 +778,75 @@ export default function EMoUForm({
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-medium text-[#4b5563] mb-1">
-                Placement Opportunity (Numbers)
+                Placement Opportunities
               </label>
-              <input
-                type="number"
-                value={formData.placementOpportunity}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    placementOpportunity: parseInt(e.target.value) || 0,
-                  })
-                }
-                min="0"
-                className="w-full"
-              />
+              <div className="relative">
+                <input
+                  type="number"
+                  value={formData.placementOpportunity}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      placementOpportunity: parseInt(e.target.value) || 0,
+                    })
+                  }
+                  min="0"
+                  step="1"
+                  className="w-full"
+                  placeholder="0"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#9ca3af] pointer-events-none">
+                  students
+                </span>
+              </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-[#4b5563] mb-1">
-                Internship Opportunity (Numbers)
+                Internship Opportunities
               </label>
-              <input
-                type="number"
-                value={formData.internshipOpportunity}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    internshipOpportunity: parseInt(e.target.value) || 0,
-                  })
-                }
-                min="0"
-                className="w-full"
-              />
+              <div className="relative">
+                <input
+                  type="number"
+                  value={formData.internshipOpportunity}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      internshipOpportunity: parseInt(e.target.value) || 0,
+                    })
+                  }
+                  min="0"
+                  step="1"
+                  className="w-full"
+                  placeholder="0"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#9ca3af] pointer-events-none">
+                  students
+                </span>
+              </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-[#4b5563] mb-1">
-                Per Student Registration Cost (₹)
+                Per Student Registration Cost
               </label>
-              <input
-                type="number"
-                value={formData.perStudentCost}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    perStudentCost: parseInt(e.target.value) || 0,
-                  })
-                }
-                min="0"
-                className="w-full"
-              />
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#6b7280] pointer-events-none">
+                  ₹
+                </span>
+                <input
+                  type="number"
+                  value={formData.perStudentCost}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      perStudentCost: parseInt(e.target.value) || 0,
+                    })
+                  }
+                  min="0"
+                  step="100"
+                  className="w-full pl-7"
+                  placeholder="0"
+                />
+              </div>
             </div>
             <div className="col-span-3">
               <label className="block text-xs font-medium text-[#4b5563] mb-1">
@@ -816,9 +918,16 @@ export default function EMoUForm({
                     </a>
                     <button
                       type="button"
-                      onClick={() =>
-                        setFormData({ ...formData, hodApprovalDoc: "" })
-                      }
+                      onClick={async () => {
+                        if (formData.hodApprovalDoc && firebaseUser) {
+                          const idToken = await firebaseUser.getIdToken();
+                          await deleteFromCloudinary(
+                            formData.hodApprovalDoc,
+                            idToken,
+                          );
+                        }
+                        setFormData({ ...formData, hodApprovalDoc: "" });
+                      }}
                       className="text-xs text-red-600 hover:text-red-800"
                     >
                       Remove
@@ -854,9 +963,16 @@ export default function EMoUForm({
                     </a>
                     <button
                       type="button"
-                      onClick={() =>
-                        setFormData({ ...formData, signedAgreementDoc: "" })
-                      }
+                      onClick={async () => {
+                        if (formData.signedAgreementDoc && firebaseUser) {
+                          const idToken = await firebaseUser.getIdToken();
+                          await deleteFromCloudinary(
+                            formData.signedAgreementDoc,
+                            idToken,
+                          );
+                        }
+                        setFormData({ ...formData, signedAgreementDoc: "" });
+                      }}
                       className="text-xs text-red-600 hover:text-red-800"
                     >
                       Remove

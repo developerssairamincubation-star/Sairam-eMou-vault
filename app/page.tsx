@@ -17,11 +17,20 @@ import {
   deleteEMoU,
   getEMoUsCount,
 } from "@/lib/firestore";
-import { uploadToCloudinary } from "@/lib/cloudinary";
+import { uploadToCloudinary, deleteFromCloudinary } from "@/lib/cloudinary";
 import { useRouter } from "next/navigation";
+import {
+  FiUpload,
+  FiDownload,
+  FiPlus,
+  FiLogOut,
+  FiGrid,
+  FiList,
+} from "react-icons/fi";
+import { MdDashboard, MdAdminPanelSettings } from "react-icons/md";
 
 function HomePage() {
-  const { user, signOut, canEdit, canDelete } = useAuth();
+  const { user, signOut, canEdit, canDelete, firebaseUser } = useAuth();
   const router = useRouter();
   const [records, setRecords] = useState<EMoURecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +51,6 @@ function HomePage() {
     onConfirm: () => void;
   } | null>(null);
   const [viewingRecord, setViewingRecord] = useState<EMoURecord | null>(null);
-  const [inlineEditingId, setInlineEditingId] = useState<string | null>(null);
   const [inlineEditData, setInlineEditData] = useState<Partial<EMoURecord>>({});
   const [editingCell, setEditingCell] = useState<{
     recordId: string;
@@ -51,10 +59,6 @@ function HomePage() {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [scrollStart, setScrollStart] = useState({ left: 0, top: 0 });
-  const [showAddButton, setShowAddButton] = useState(false);
-  const [creatingNewRecord, setCreatingNewRecord] = useState(false);
-  const [newRecordData, setNewRecordData] = useState<Partial<EMoURecord>>({});
-  const [editingNewCell, setEditingNewCell] = useState<string | null>(null);
   const [viewingDocument, setViewingDocument] = useState<{
     url: string;
     title: string;
@@ -67,6 +71,7 @@ function HomePage() {
     recordId: string;
     field: "hodApprovalDoc" | "signedAgreementDoc";
   } | null>(null);
+  const [showAll, setShowAll] = useState(false);
 
   // Stats state for server-side calculation
   const [stats, setStats] = useState({
@@ -88,6 +93,16 @@ function HomePage() {
     "IT",
     "AIDS",
     "CSBS",
+    "E&I",
+    "MECHATRONICS",
+    "CCE",
+    "AIML",
+    "CYBERSECURITY",
+    "IOT",
+    "EICE",
+    "CSE MTECH",
+    "Incubation",
+    "Institution",
   ];
 
   useEffect(() => {
@@ -99,6 +114,7 @@ function HomePage() {
     selectedStatus,
     debouncedSearchTerm,
     user,
+    showAll,
   ]);
 
   // Debounce search term to avoid too many API calls
@@ -151,6 +167,7 @@ function HomePage() {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingCell, inlineEditData, user]);
 
   const loadRecords = async () => {
@@ -164,7 +181,12 @@ function HomePage() {
         filters.department = selectedDepartment as FilterOptions["department"];
       }
 
-      if (selectedStatus !== "all") {
+      // Special handling for "Expiring" and "With Docs" - these need client-side filtering
+      if (selectedStatus === "Expiring") {
+        filters.status = "Active";
+      } else if (selectedStatus === "With Docs") {
+        // Don't filter by status - we'll filter by document presence client-side
+      } else if (selectedStatus !== "all") {
         filters.status = selectedStatus as FilterOptions["status"];
       }
 
@@ -176,23 +198,78 @@ function HomePage() {
       const approvalStatus = "approved";
 
       const result = await getEMoUsPage(
-        currentPage,
-        itemsPerPage,
+        showAll ? 1 : currentPage,
+        showAll ? 10000 : itemsPerPage,
         filters,
         approvalStatus,
       );
 
       let data = result.data;
 
-      // Client-side search filtering (Firestore doesn't support full-text search)
+      // Client-side search filtering (global across all fields)
       if (debouncedSearchTerm) {
         const term = debouncedSearchTerm.toLowerCase();
-        data = data.filter(
-          (r) =>
-            r.companyName.toLowerCase().includes(term) ||
-            r.description.toLowerCase().includes(term) ||
-            r.id.toLowerCase().includes(term),
-        );
+        data = data.filter((r) => {
+          const searchableFields = [
+            r.id,
+            r.companyName,
+            r.department,
+            r.description,
+            r.fromDate,
+            r.toDate,
+            r.status,
+            r.scope,
+            r.maintainedBy,
+            r.aboutCompany,
+            r.companyAddress,
+            r.companyWebsite,
+            r.industryContactName,
+            r.industryContactMobile,
+            r.industryContactEmail,
+            r.institutionContactName,
+            r.institutionContactMobile,
+            r.institutionContactEmail,
+            r.clubsAligned,
+            r.sdgGoals,
+            r.skillsTechnologies,
+            r.benefitsAchieved,
+            r.goingForRenewal,
+            r.documentAvailability,
+            r.createdByName,
+          ];
+          return searchableFields.some(
+            (field) => field && String(field).toLowerCase().includes(term),
+          );
+        });
+      }
+
+      // Filter for expiring records (within 2 months)
+      if (selectedStatus === "Expiring") {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const twoMonthsFromNow = new Date(today);
+        twoMonthsFromNow.setMonth(twoMonthsFromNow.getMonth() + 2);
+
+        data = data.filter((record) => {
+          if (
+            !record.toDate ||
+            record.toDate.toLowerCase().includes("perpetual") ||
+            record.toDate.toLowerCase().includes("indefinite")
+          ) {
+            return false;
+          }
+
+          try {
+            const toDate = parseDate(record.toDate);
+            toDate.setHours(0, 0, 0, 0);
+
+            // Record is expiring if toDate is between today and 2 months from now
+            return toDate > today && toDate <= twoMonthsFromNow;
+          } catch {
+            return false;
+          }
+        });
       }
 
       // Filter to only show records with at least one document uploaded
@@ -278,14 +355,83 @@ function HomePage() {
         ),
       ]);
 
+      // Calculate expiring records (Active records expiring within 2 months)
+      let expiringCount = 0;
+      try {
+        const filters: FilterOptions = {
+          status: "Active",
+        };
+        if (selectedDepartment !== "all") {
+          filters.department =
+            selectedDepartment as FilterOptions["department"];
+        }
+
+        // Fetch active records to check expiration dates
+        const activeRecords = await getEMoUsPage(
+          1,
+          10000,
+          filters,
+          approvalStatus,
+        );
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const twoMonthsFromNow = new Date(today);
+        twoMonthsFromNow.setMonth(twoMonthsFromNow.getMonth() + 2);
+
+        expiringCount = activeRecords.data.filter((record) => {
+          if (
+            !record.toDate ||
+            record.toDate.toLowerCase().includes("perpetual") ||
+            record.toDate.toLowerCase().includes("indefinite")
+          ) {
+            return false;
+          }
+
+          try {
+            const toDate = parseDate(record.toDate);
+            toDate.setHours(0, 0, 0, 0);
+
+            // Record is expiring if toDate is between today and 2 months from now
+            return toDate > today && toDate <= twoMonthsFromNow;
+          } catch {
+            return false;
+          }
+        }).length;
+      } catch (error) {
+        console.error("Failed to calculate expiring records:", error);
+      }
+
+      // Calculate withDocs count from all approved records
+      let withDocsCount = 0;
+      try {
+        const allApprovedFilters: FilterOptions = {};
+        if (selectedDepartment !== "all") {
+          allApprovedFilters.department =
+            selectedDepartment as FilterOptions["department"];
+        }
+        const allApproved = await getEMoUsPage(
+          1,
+          10000,
+          allApprovedFilters,
+          approvalStatus,
+        );
+        withDocsCount = allApproved.data.filter(
+          (r) => r.hodApprovalDoc || r.signedAgreementDoc,
+        ).length;
+      } catch (error) {
+        console.error("Failed to calculate withDocs count:", error);
+      }
+
       setStats({
         total,
         active,
-        expiring: 0, // This requires date calculation, keeping simplified for now
+        expiring: expiringCount,
         expired,
         draft,
         renewal,
-        withDocs: 0, // This requires checking document fields, keeping simplified
+        withDocs: withDocsCount,
       });
     } catch (error) {
       console.error("Failed to load stats:", error);
@@ -426,10 +572,6 @@ function HomePage() {
     setShowForm(true);
   };
 
-  const handleDoubleClick = (record: EMoURecord) => {
-    // Deprecated - using single click on cells now
-  };
-
   const handleCellClick = (record: EMoURecord, field: keyof EMoURecord) => {
     if (
       canEdit(record.createdBy, record.department) &&
@@ -447,7 +589,37 @@ function HomePage() {
     field: keyof EMoURecord,
     value: string | number,
   ) => {
-    setInlineEditData((prev) => ({ ...prev, [field]: value }));
+    setInlineEditData((prev) => {
+      const updated = { ...prev, [field]: value };
+
+      // Auto-update status when toDate changes
+      if (field === "toDate" && typeof value === "string") {
+        if (
+          value.toLowerCase().includes("perpetual") ||
+          value.toLowerCase().includes("indefinite")
+        ) {
+          updated.status = "Active";
+        } else {
+          try {
+            const [day, month, year] = value.split(".").map(Number);
+            const toDate = new Date(year, month - 1, day);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            toDate.setHours(0, 0, 0, 0);
+
+            if (toDate >= today) {
+              updated.status = "Active";
+            } else {
+              updated.status = "Expired";
+            }
+          } catch {
+            // Keep current status if date parsing fails
+          }
+        }
+      }
+
+      return updated;
+    });
   };
 
   const saveInlineEdit = async () => {
@@ -480,86 +652,85 @@ function HomePage() {
     }
   };
 
+  // Save a specific field value directly, bypassing stale state issues with onBlur
+  const saveFieldDirectly = async (
+    field: keyof EMoURecord,
+    value: string | number,
+  ) => {
+    if (!editingCell || !user) return;
+
+    try {
+      const updates: Partial<EMoURecord> = {
+        ...inlineEditData,
+        [field]: value,
+      };
+
+      // Auto-update status when toDate changes
+      if (field === "toDate" && typeof value === "string") {
+        if (
+          value.toLowerCase().includes("perpetual") ||
+          value.toLowerCase().includes("indefinite")
+        ) {
+          updates.status = "Active";
+        } else {
+          try {
+            const [day, month, year] = value.split(".").map(Number);
+            const toDate = new Date(year, month - 1, day);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            toDate.setHours(0, 0, 0, 0);
+            if (toDate >= today) {
+              updates.status = "Active";
+            } else {
+              updates.status = "Expired";
+            }
+          } catch {
+            // Keep current status if date parsing fails
+          }
+        }
+      }
+
+      // Auto-update department when maintainedBy changes
+      if (field === "maintainedBy" && typeof value === "string") {
+        if (value === "Institution" || value === "Incubation") {
+          updates.department = value;
+        } else if (value === "Departments") {
+          // If department is currently Institution/Incubation, reset to first department
+          const currentDept = (inlineEditData.department as string) || "";
+          if (currentDept === "Institution" || currentDept === "Incubation") {
+            updates.department = "CSE";
+          }
+        }
+      }
+
+      const updatedData = {
+        ...updates,
+        updatedBy: user.uid,
+        updatedByName: user.displayName,
+        updatedAt: new Date(),
+      };
+
+      await updateEMoU(editingCell.recordId, updatedData);
+
+      setRecords((prevRecords) =>
+        prevRecords.map((record) =>
+          record.id === editingCell.recordId
+            ? { ...record, ...updatedData }
+            : record,
+        ),
+      );
+
+      setEditingCell(null);
+      setInlineEditData({});
+    } catch (error) {
+      console.error("Failed to update record:", error);
+      setAlert({ message: "Failed to update record", type: "error" });
+    }
+  };
+
   const cancelInlineEdit = () => {
     setEditingCell(null);
     setInlineEditData({});
-  };
-
-  const handleNewRecordFieldChange = (
-    field: string,
-    value: string | number,
-  ) => {
-    setNewRecordData({ ...newRecordData, [field]: value });
-  };
-
-  const saveNewRecord = async (data: Partial<EMoURecord>) => {
-    if (!user) return;
-
-    // Validate required fields
-    if (!data.companyName || !data.department) {
-      setAlert({
-        message: "Company Name and Department are required!",
-        type: "error",
-      });
-      return;
-    }
-
-    try {
-      const now = new Date();
-      const recordData = {
-        department: data.department,
-        companyName: data.companyName,
-        fromDate: data.fromDate || "",
-        toDate: data.toDate || "",
-        scope: data.scope || "National",
-        maintainedBy: data.maintainedBy || "Departments",
-        approvalStatus:
-          data.hodApprovalDoc && data.signedAgreementDoc ? "pending" : "draft",
-        status: data.status || "Draft",
-        description: data.description || "",
-        documentAvailability: data.documentAvailability || "Not Available",
-        hodApprovalDoc: data.hodApprovalDoc,
-        signedAgreementDoc: data.signedAgreementDoc,
-        goingForRenewal: data.goingForRenewal || "No",
-        perStudentCost: data.perStudentCost || 0,
-        placementOpportunity: data.placementOpportunity || 0,
-        internshipOpportunity: data.internshipOpportunity || 0,
-        companyRelationship: (data.companyRelationship || 3) as
-          | 1
-          | 2
-          | 3
-          | 4
-          | 5,
-        aboutCompany: data.aboutCompany,
-        companyAddress: data.companyAddress,
-        companyWebsite: data.companyWebsite,
-        industryContactName: data.industryContactName,
-        industryContactMobile: data.industryContactMobile,
-        industryContactEmail: data.industryContactEmail,
-        institutionContactName: data.institutionContactName,
-        institutionContactMobile: data.institutionContactMobile,
-        institutionContactEmail: data.institutionContactEmail,
-        clubsAligned: data.clubsAligned,
-        sdgGoals: data.sdgGoals,
-        skillsTechnologies: data.skillsTechnologies,
-        benefitsAchieved: data.benefitsAchieved,
-        scannedCopy: data.scannedCopy,
-        createdBy: user.uid,
-        createdByName: user.displayName,
-        createdAt: now,
-      };
-
-      await createEMoU(recordData as Omit<EMoURecord, "id">);
-
-      setCreatingNewRecord(false);
-      setNewRecordData({});
-      setEditingNewCell(null);
-      loadRecords();
-      setAlert({ message: "Record created successfully!", type: "success" });
-    } catch (error) {
-      console.error("Failed to create record:", error);
-      setAlert({ message: "Failed to create record", type: "error" });
-    }
   };
 
   const handleExport = async () => {
@@ -684,6 +855,14 @@ function HomePage() {
 
     setUploadingDoc({ recordId, field });
     try {
+      // Delete old file from Cloudinary if replacing
+      const existingRecord = records.find((r) => r.id === recordId);
+      const oldUrl = existingRecord?.[field];
+      if (oldUrl && firebaseUser) {
+        const idToken = await firebaseUser.getIdToken();
+        await deleteFromCloudinary(oldUrl, idToken);
+      }
+
       const result = await uploadToCloudinary(file);
 
       if (!result.success || !result.url) {
@@ -814,51 +993,57 @@ function HomePage() {
                 </div>
                 <button
                   onClick={() => router.push("/dashboard")}
-                  className="btn btn-secondary"
+                  className="btn btn-secondary flex items-center gap-2"
                 >
-                  Dashboard
+                  <MdDashboard /> Dashboard
                 </button>
                 {user?.role === "admin" && (
                   <button
                     onClick={() => router.push("/admin")}
-                    className="btn btn-secondary"
+                    className="btn btn-secondary flex items-center gap-2"
                   >
-                    Admin
+                    <MdAdminPanelSettings /> Admin
                   </button>
                 )}
                 {user?.role === "master" && (
                   <button
                     onClick={() => router.push("/admin")}
-                    className="btn btn-secondary"
+                    className="btn btn-secondary flex items-center gap-2"
                   >
-                    Approvals
+                    <MdAdminPanelSettings /> Approvals
                   </button>
                 )}
                 {user?.role === "hod" && (
                   <button
                     onClick={() => router.push("/hod")}
-                    className="btn btn-secondary"
+                    className="btn btn-secondary flex items-center gap-2"
                   >
-                    HOD Dashboard
+                    <MdDashboard /> HOD Dashboard
                   </button>
                 )}
-                <button onClick={handleExport} className="btn btn-secondary">
-                  Export
+                <button
+                  onClick={handleExport}
+                  className="btn btn-secondary flex items-center gap-2"
+                >
+                  <FiDownload /> Export
                 </button>
                 <button
                   onClick={() => setShowImportDialog(true)}
-                  className="btn btn-secondary"
+                  className="btn btn-secondary flex items-center gap-2"
                 >
-                  Import
+                  <FiUpload /> Import
                 </button>
                 <button
                   onClick={() => setShowForm(true)}
-                  className="btn btn-primary"
+                  className="btn btn-primary flex items-center gap-2"
                 >
-                  + New MOU
+                  <FiPlus /> New MOU
                 </button>
-                <button onClick={signOut} className="btn btn-secondary">
-                  Logout
+                <button
+                  onClick={signOut}
+                  className="btn btn-secondary flex items-center gap-2"
+                >
+                  <FiLogOut /> Logout
                 </button>
               </div>
             </div>
@@ -910,7 +1095,19 @@ function HomePage() {
             </div>
             <div className="flex items-center gap-3">
               <div className="text-xs text-[#6b7280]">{totalCount} records</div>
-              {totalCount > 0 && (
+              {totalCount > itemsPerPage && (
+                <button
+                  onClick={() => {
+                    setShowAll(!showAll);
+                    setCurrentPage(1);
+                  }}
+                  className="px-3 py-1.5 text-xs border border-[#3b82f6] bg-[#3b82f6] text-white rounded hover:bg-[#2563eb] cursor-pointer flex items-center gap-1.5"
+                >
+                  {showAll ? <FiList /> : <FiGrid />}
+                  {showAll ? "Show Paginated" : "Show All"}
+                </button>
+              )}
+              {totalCount > 0 && !showAll && (
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() =>
@@ -1055,11 +1252,7 @@ function HomePage() {
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
-                onMouseLeave={() => {
-                  handleMouseLeave();
-                  setShowAddButton(false);
-                }}
-                onMouseEnter={() => setShowAddButton(true)}
+                onMouseLeave={handleMouseLeave}
               >
                 <style jsx>{`
                   .sheet-table td {
@@ -1150,6 +1343,11 @@ function HomePage() {
                             content.substring(0, truncateLength) + "...";
                         }
 
+                        // Filter out invalid placeholder values
+                        if (displayContent === "file chosen") {
+                          displayContent = "";
+                        }
+
                         return (
                           <td
                             className={`${className} ${isEditable ? "cursor-text hover:bg-blue-50" : ""}`}
@@ -1193,11 +1391,77 @@ function HomePage() {
                             record.companyName,
                             "",
                           )}
-                          {renderEditableCell(
-                            "department",
-                            record.department,
-                            "",
-                          )}
+                          {(() => {
+                            const maintainedByValue =
+                              record.maintainedBy || "Departments";
+                            const isDeptEditable =
+                              maintainedByValue === "Departments";
+                            const isEditing =
+                              editingCell?.recordId === record.id &&
+                              editingCell?.field === "department";
+                            const cellStyle = isEditing
+                              ? {
+                                  border: "3px solid #000000",
+                                  outline: "none",
+                                  padding: "4px",
+                                  backgroundColor: "#f5f5f5",
+                                }
+                              : {};
+
+                            return (
+                              <td
+                                className={`text-xs ${isEditable && isDeptEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
+                                onClick={() =>
+                                  isEditable &&
+                                  isDeptEditable &&
+                                  handleCellClick(record, "department")
+                                }
+                                style={cellStyle}
+                                title={
+                                  isDeptEditable
+                                    ? isEditable && !isEditing
+                                      ? "Click to edit"
+                                      : ""
+                                    : `Set by Maintained By: ${maintainedByValue}`
+                                }
+                              >
+                                {isDeptEditable ? (
+                                  isEditing ? (
+                                    <select
+                                      value={
+                                        (inlineEditData.department as string) ||
+                                        record.department
+                                      }
+                                      onChange={(e) =>
+                                        saveFieldDirectly(
+                                          "department",
+                                          e.target.value,
+                                        )
+                                      }
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Escape")
+                                          cancelInlineEdit();
+                                      }}
+                                      autoFocus
+                                      className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    >
+                                      {departments.map((dept) => (
+                                        <option key={dept} value={dept}>
+                                          {dept}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    record.department
+                                  )
+                                ) : (
+                                  <span className="text-[#6b7280] italic">
+                                    {maintainedByValue}
+                                  </span>
+                                )}
+                              </td>
+                            );
+                          })()}
                           {(() => {
                             const isEditing =
                               editingCell?.recordId === record.id &&
@@ -1232,15 +1496,10 @@ function HomePage() {
                                       "National"
                                     }
                                     onChange={(e) =>
-                                      handleInlineFieldChange(
-                                        "scope",
-                                        e.target.value,
-                                      )
+                                      saveFieldDirectly("scope", e.target.value)
                                     }
-                                    onBlur={saveInlineEdit}
                                     onKeyDown={(e) => {
-                                      if (e.key === "Enter") saveInlineEdit();
-                                      else if (e.key === "Escape")
+                                      if (e.key === "Escape")
                                         cancelInlineEdit();
                                     }}
                                     autoFocus
@@ -1292,15 +1551,13 @@ function HomePage() {
                                       "Departments"
                                     }
                                     onChange={(e) =>
-                                      handleInlineFieldChange(
+                                      saveFieldDirectly(
                                         "maintainedBy",
                                         e.target.value,
                                       )
                                     }
-                                    onBlur={saveInlineEdit}
                                     onKeyDown={(e) => {
-                                      if (e.key === "Enter") saveInlineEdit();
-                                      else if (e.key === "Escape")
+                                      if (e.key === "Escape")
                                         cancelInlineEdit();
                                     }}
                                     autoFocus
@@ -1360,7 +1617,9 @@ function HomePage() {
                                   <input
                                     type="date"
                                     defaultValue={convertToInputFormat(
-                                      record.fromDate,
+                                      record.fromDate === "file chosen"
+                                        ? ""
+                                        : record.fromDate,
                                     )}
                                     onChange={(e) => {
                                       const val = e.target.value;
@@ -1383,6 +1642,8 @@ function HomePage() {
                                     autoFocus
                                     className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
                                   />
+                                ) : record.fromDate === "file chosen" ? (
+                                  ""
                                 ) : (
                                   record.fromDate
                                 )}
@@ -1427,7 +1688,9 @@ function HomePage() {
                                   <input
                                     type="date"
                                     defaultValue={convertToInputFormat(
-                                      record.toDate,
+                                      record.toDate === "file chosen"
+                                        ? ""
+                                        : record.toDate,
                                     )}
                                     onChange={(e) => {
                                       const val = e.target.value;
@@ -1450,6 +1713,8 @@ function HomePage() {
                                     autoFocus
                                     className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
                                   />
+                                ) : record.toDate === "file chosen" ? (
+                                  ""
                                 ) : (
                                   record.toDate
                                 )}
@@ -1489,15 +1754,13 @@ function HomePage() {
                                       inlineEditData.status || record.status
                                     }
                                     onChange={(e) =>
-                                      handleInlineFieldChange(
+                                      saveFieldDirectly(
                                         "status",
                                         e.target.value,
                                       )
                                     }
-                                    onBlur={saveInlineEdit}
                                     onKeyDown={(e) => {
-                                      if (e.key === "Enter") saveInlineEdit();
-                                      else if (e.key === "Escape")
+                                      if (e.key === "Escape")
                                         cancelInlineEdit();
                                     }}
                                     autoFocus
@@ -1633,15 +1896,13 @@ function HomePage() {
                                       3
                                     }
                                     onChange={(e) =>
-                                      handleInlineFieldChange(
+                                      saveFieldDirectly(
                                         "companyRelationship",
                                         parseInt(e.target.value),
                                       )
                                     }
-                                    onBlur={saveInlineEdit}
                                     onKeyDown={(e) => {
-                                      if (e.key === "Enter") saveInlineEdit();
-                                      else if (e.key === "Escape")
+                                      if (e.key === "Escape")
                                         cancelInlineEdit();
                                     }}
                                     autoFocus
@@ -1755,15 +2016,13 @@ function HomePage() {
                                       "No"
                                     }
                                     onChange={(e) =>
-                                      handleInlineFieldChange(
+                                      saveFieldDirectly(
                                         "goingForRenewal",
                                         e.target.value,
                                       )
                                     }
-                                    onBlur={saveInlineEdit}
                                     onKeyDown={(e) => {
-                                      if (e.key === "Enter") saveInlineEdit();
-                                      else if (e.key === "Escape")
+                                      if (e.key === "Escape")
                                         cancelInlineEdit();
                                     }}
                                     autoFocus
@@ -1822,15 +2081,13 @@ function HomePage() {
                                       "Not Available"
                                     }
                                     onChange={(e) =>
-                                      handleInlineFieldChange(
+                                      saveFieldDirectly(
                                         "documentAvailability",
                                         e.target.value,
                                       )
                                     }
-                                    onBlur={saveInlineEdit}
                                     onKeyDown={(e) => {
-                                      if (e.key === "Enter") saveInlineEdit();
-                                      else if (e.key === "Escape")
+                                      if (e.key === "Escape")
                                         cancelInlineEdit();
                                     }}
                                     autoFocus
@@ -1857,7 +2114,7 @@ function HomePage() {
                                       title: `HO Approval - ${record.companyName}`,
                                     })
                                   }
-                                  className="text-blue-600 hover:underline cursor-pointer"
+                                  className="text-blue-600 hover:underline cursor-pointer text-xs"
                                 >
                                   View
                                 </button>
@@ -1867,14 +2124,16 @@ function HomePage() {
                                   {record.hodApprovalDoc && (
                                     <span className="text-gray-300">|</span>
                                   )}
-                                  <label className="cursor-pointer text-green-600 hover:text-green-800 relative">
+                                  <label className="relative cursor-pointer px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-1 text-xs">
                                     {uploadingDoc?.recordId === record.id &&
                                     uploadingDoc?.field === "hodApprovalDoc" ? (
-                                      <span className="text-xs">
+                                      <span className="flex items-center gap-1">
+                                        <div className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
                                         Uploading...
                                       </span>
                                     ) : (
-                                      <span className="text-xs">
+                                      <span className="flex items-center gap-1">
+                                        <FiUpload />
                                         {record.hodApprovalDoc
                                           ? "Replace"
                                           : "Upload"}
@@ -1919,7 +2178,7 @@ function HomePage() {
                                       title: `Signed Agreement - ${record.companyName}`,
                                     })
                                   }
-                                  className="text-blue-600 hover:underline cursor-pointer"
+                                  className="text-blue-600 hover:underline cursor-pointer text-xs"
                                 >
                                   View
                                 </button>
@@ -1929,15 +2188,17 @@ function HomePage() {
                                   {record.signedAgreementDoc && (
                                     <span className="text-gray-300">|</span>
                                   )}
-                                  <label className="cursor-pointer text-green-600 hover:text-green-800 relative">
+                                  <label className="relative cursor-pointer px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-1 text-xs">
                                     {uploadingDoc?.recordId === record.id &&
                                     uploadingDoc?.field ===
                                       "signedAgreementDoc" ? (
-                                      <span className="text-xs">
+                                      <span className="flex items-center gap-1">
+                                        <div className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
                                         Uploading...
                                       </span>
                                     ) : (
-                                      <span className="text-xs">
+                                      <span className="flex items-center gap-1">
+                                        <FiUpload />
                                         {record.signedAgreementDoc
                                           ? "Replace"
                                           : "Upload"}
