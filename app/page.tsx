@@ -855,12 +855,15 @@ function HomePage() {
 
     setUploadingDoc({ recordId, field });
     try {
-      // Delete old file from Cloudinary if replacing
+      // Delete old file from Cloudinary if replacing (non-blocking)
       const existingRecord = records.find((r) => r.id === recordId);
       const oldUrl = existingRecord?.[field];
       if (oldUrl && firebaseUser) {
         const idToken = await firebaseUser.getIdToken();
-        await deleteFromCloudinary(oldUrl, idToken);
+        // Don't block on delete - proceed with upload even if delete fails
+        deleteFromCloudinary(oldUrl, idToken).catch((err) => {
+          console.warn("Failed to delete old file (non-critical):", err);
+        });
       }
 
       const result = await uploadToCloudinary(file);

@@ -50,6 +50,9 @@ export function parseCloudinaryUrl(url: string): {
 
     let public_id = publicIdParts.join("/");
 
+    // URL-decode the public_id (handles %20, %2F, etc.)
+    public_id = decodeURIComponent(public_id);
+
     // For image types, strip the file extension
     if (resource_type === "image") {
       public_id = public_id.replace(/\.[^/.]+$/, "");

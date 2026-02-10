@@ -111,8 +111,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    console.error("Cloudinary delete failed:", { public_id, resource_type, result });
     return NextResponse.json(
-      { error: "Failed to delete file", details: result },
+      { 
+        error: result.error?.message || "Failed to delete file",
+        details: result 
+      },
       { status: 500 }
     );
   } catch (error) {
