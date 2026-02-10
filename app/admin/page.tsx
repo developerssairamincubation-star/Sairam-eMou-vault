@@ -245,11 +245,16 @@ function AdminPage() {
   }
 
   const handleCellClick = (record: EMoURecord, field: keyof EMoURecord) => {
+    // Non-editable fields - same restrictions as main page
     if (
       field !== "id" &&
+      field !== "status" &&
       field !== "createdBy" &&
       field !== "createdByName" &&
-      field !== "createdAt"
+      field !== "createdAt" &&
+      field !== "updatedBy" &&
+      field !== "updatedByName" &&
+      field !== "updatedAt"
     ) {
       setEditingCell({ recordId: record.id, field });
       setInlineEditData(record);
@@ -717,6 +722,30 @@ function AdminPage() {
     }
   };
 
+  // Check if a date has a very large year (like 9999) - treat as perpetual
+  const isPerpetualDate = (dateStr: string): boolean => {
+    if (!dateStr) return false;
+    const parts = dateStr.split(".");
+    if (parts.length === 3) {
+      const year = parseInt(parts[2], 10);
+      return year >= 9000; // Years 9000+ are treated as perpetual
+    }
+    return false;
+  };
+
+  // Format date for display - show "Perpetual" for large year dates
+  const formatDisplayDate = (dateStr: string): string => {
+    if (!dateStr || dateStr === "file chosen") return "";
+    if (
+      dateStr.toLowerCase().includes("perpetual") ||
+      dateStr.toLowerCase().includes("indefinite") ||
+      isPerpetualDate(dateStr)
+    ) {
+      return "Perpetual";
+    }
+    return dateStr;
+  };
+
   const getDisplayStatus = (record: EMoURecord): string => {
     // Handle "file chosen" placeholder (cast to string to avoid type error)
     const statusStr = record.status as string;
@@ -732,7 +761,8 @@ function AdminPage() {
     if (
       !toDate ||
       toDate.toLowerCase().includes("perpetual") ||
-      toDate.toLowerCase().includes("indefinite")
+      toDate.toLowerCase().includes("indefinite") ||
+      isPerpetualDate(toDate)
     ) {
       return "Active";
     }
@@ -1094,7 +1124,7 @@ function AdminPage() {
                             {record[field] === "file chosen" ||
                             record[field] === "file chosen"
                               ? ""
-                              : record[field]}
+                              : formatDisplayDate(record[field])}
                           </span>
                           <FiCalendar className="text-blue-500" size={12} />
                         </span>
@@ -1161,60 +1191,19 @@ function AdminPage() {
                     )}
                     {renderDateCell("fromDate")}
                     {renderDateCell("toDate")}
-                    {(() => {
-                      const isEditing =
-                        editingCell?.recordId === record.id &&
-                        editingCell?.field === "status";
-                      const cellStyle = isEditing
-                        ? {
-                            border: "3px solid #000000",
-                            outline: "none",
-                            padding: "4px",
-                            backgroundColor: "#f5f5f5",
-                          }
-                        : {};
-
-                      return (
-                        <td
-                          className="cursor-pointer hover:bg-blue-50"
-                          onClick={() => handleCellClick(record, "status")}
-                          style={cellStyle}
-                          title="Click to edit"
-                        >
-                          {isEditing ? (
-                            <select
-                              value={
-                                inlineEditData.status ||
-                                getDisplayStatus(record)
-                              }
-                              onChange={(e) =>
-                                saveFieldDirectly("status", e.target.value)
-                              }
-                              onKeyDown={(e) => {
-                                if (e.key === "Escape") cancelInlineEdit();
-                              }}
-                              autoFocus
-                              className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                            >
-                              <option value="Active">Active</option>
-                              <option value="Expired">Expired</option>
-                              <option value="Renewal Pending">
-                                Renewal Pending
-                              </option>
-                              <option value="Draft">Draft</option>
-                            </select>
-                          ) : (
-                            <span
-                              className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                                getDisplayStatus(record),
-                              )}`}
-                            >
-                              {getDisplayStatus(record)}
-                            </span>
-                          )}
-                        </td>
-                      );
-                    })()}
+                    {/* Status is auto-calculated - NOT editable */}
+                    <td
+                      className="text-center"
+                      title="Status is auto-calculated based on expiry date"
+                    >
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
+                          getDisplayStatus(record),
+                        )}`}
+                      >
+                        {getDisplayStatus(record)}
+                      </span>
+                    </td>
                     {renderEditableCell(
                       record,
                       "description",

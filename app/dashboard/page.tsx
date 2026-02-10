@@ -547,7 +547,7 @@ export default function Dashboard() {
                     <div className="text-xl font-bold text-purple-600">
                       {stats.totalPlacement}
                     </div>
-                    <div className="text-[10px] text-gray-600">Placements</div>
+                    <div className="text-[10px] text-gray-600">Total No of Students Placed</div>
                   </div>
                 </div>
               </div>
@@ -582,7 +582,7 @@ export default function Dashboard() {
                     <div className="text-xl font-bold text-indigo-600">
                       {stats.totalInternship}
                     </div>
-                    <div className="text-[10px] text-gray-600">Internships</div>
+                    <div className="text-[10px] text-gray-600">Total No of Students Interned</div>
                   </div>
                 </div>
               </div>

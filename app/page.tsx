@@ -262,6 +262,13 @@ function HomePage() {
             return false;
           }
 
+          // Check for large year dates (9999 etc.)
+          const parts = record.toDate.split(".");
+          if (parts.length === 3) {
+            const year = parseInt(parts[2], 10);
+            if (year >= 9000) return false; // Perpetual dates don't expire
+          }
+
           try {
             const toDate = parseDate(record.toDate);
             toDate.setHours(0, 0, 0, 0);
@@ -389,6 +396,13 @@ function HomePage() {
             record.toDate.toLowerCase().includes("indefinite")
           ) {
             return false;
+          }
+
+          // Check for large year dates (9999 etc.)
+          const parts = record.toDate.split(".");
+          if (parts.length === 3) {
+            const year = parseInt(parts[2], 10);
+            if (year >= 9000) return false; // Perpetual dates don't expire
           }
 
           try {
@@ -919,6 +933,30 @@ function HomePage() {
     }
   };
 
+  // Check if a date has a very large year (like 9999) - treat as perpetual
+  const isPerpetualDate = (dateStr: string): boolean => {
+    if (!dateStr) return false;
+    const parts = dateStr.split(".");
+    if (parts.length === 3) {
+      const year = parseInt(parts[2], 10);
+      return year >= 9000; // Years 9000+ are treated as perpetual
+    }
+    return false;
+  };
+
+  // Format date for display - show "Perpetual" for large year dates
+  const formatDisplayDate = (dateStr: string): string => {
+    if (!dateStr || dateStr === "file chosen") return "";
+    if (
+      dateStr.toLowerCase().includes("perpetual") ||
+      dateStr.toLowerCase().includes("indefinite") ||
+      isPerpetualDate(dateStr)
+    ) {
+      return "Perpetual";
+    }
+    return dateStr;
+  };
+
   // Calculate display status - shows "Expiring" instead of "Active" for records expiring within 2 months
   const getDisplayStatus = (record: EMoURecord): string => {
     if (record.status !== "Active") return record.status;
@@ -927,7 +965,8 @@ function HomePage() {
     if (
       !toDate ||
       toDate.toLowerCase().includes("perpetual") ||
-      toDate.toLowerCase().includes("indefinite")
+      toDate.toLowerCase().includes("indefinite") ||
+      isPerpetualDate(toDate)
     ) {
       return "Active";
     }
@@ -1878,7 +1917,9 @@ function HomePage() {
                                     ""
                                   ) : (
                                     <span className="flex items-center justify-between gap-1">
-                                      <span>{record.toDate}</span>
+                                      <span>
+                                        {formatDisplayDate(record.toDate)}
+                                      </span>
                                       <FiCalendar
                                         className="text-blue-500"
                                         size={12}
