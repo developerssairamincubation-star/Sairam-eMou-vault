@@ -610,9 +610,15 @@ function HomePage() {
 
       // Auto-update status when toDate changes
       if (field === "toDate" && typeof value === "string") {
+        // Check for perpetual text or large year dates
+        const parts = value.split(".");
+        const isLargeYear =
+          parts.length === 3 && parseInt(parts[2], 10) >= 9000;
+
         if (
           value.toLowerCase().includes("perpetual") ||
-          value.toLowerCase().includes("indefinite")
+          value.toLowerCase().includes("indefinite") ||
+          isLargeYear
         ) {
           updated.status = "Active";
         } else {
@@ -683,9 +689,15 @@ function HomePage() {
 
       // Auto-update status when toDate changes
       if (field === "toDate" && typeof value === "string") {
+        // Check for perpetual text or large year dates
+        const parts = value.split(".");
+        const isLargeYear =
+          parts.length === 3 && parseInt(parts[2], 10) >= 9000;
+
         if (
           value.toLowerCase().includes("perpetual") ||
-          value.toLowerCase().includes("indefinite")
+          value.toLowerCase().includes("indefinite") ||
+          isLargeYear
         ) {
           updates.status = "Active";
         } else {
@@ -959,15 +971,22 @@ function HomePage() {
 
   // Calculate display status - shows "Expiring" instead of "Active" for records expiring within 2 months
   const getDisplayStatus = (record: EMoURecord): string => {
-    if (record.status !== "Active") return record.status;
-
+    // Check if toDate is perpetual - always show Active for perpetual dates
     const toDate = record.toDate;
     if (
-      !toDate ||
-      toDate.toLowerCase().includes("perpetual") ||
-      toDate.toLowerCase().includes("indefinite") ||
-      isPerpetualDate(toDate)
+      toDate &&
+      (toDate.toLowerCase().includes("perpetual") ||
+        toDate.toLowerCase().includes("indefinite") ||
+        isPerpetualDate(toDate))
     ) {
+      return "Active";
+    }
+
+    // If not Active, return as-is
+    if (record.status !== "Active") return record.status;
+
+    // Check if Active record is expiring
+    if (!toDate) {
       return "Active";
     }
 
