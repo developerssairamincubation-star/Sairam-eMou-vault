@@ -328,7 +328,7 @@ export default function Dashboard() {
           {/* Main Grid - Ultra Dense 4 Row Layout */}
           <div className="space-y-3">
             {/* Row 1: 8 Compact Stats */}
-            <div className="grid grid-cols-8 gap-2">
+            <div className="grid grid-cols-7 gap-2">
               <div
                 className="bg-white rounded-lg p-3 border border-gray-200 cursor-pointer hover:shadow-lg transition-shadow"
                 onClick={(e) =>
