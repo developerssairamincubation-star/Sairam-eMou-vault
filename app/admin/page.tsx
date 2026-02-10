@@ -7,6 +7,7 @@ import Alert from "@/components/Alert";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import DocumentViewer from "@/components/DocumentViewer";
 import ViewRecordDialog from "@/components/ViewRecordDialog";
+import { CellDropdown } from "@/components/CustomDropdown";
 import {
   User,
   UserRole,
@@ -1024,53 +1025,41 @@ function AdminPage() {
                   const isEditing =
                     editingCell?.recordId === record.id &&
                     editingCell?.field === field;
-                  const cellStyle = isEditing
-                    ? {
-                        border: "3px solid #000000",
-                        outline: "none",
-                        padding: "4px",
-                        backgroundColor: "#f5f5f5",
-                      }
-                    : {};
+
+                  const currentValue = String(
+                    (record[field] as string) === "file chosen"
+                      ? defaultValue
+                      : (record[field] as string) || defaultValue,
+                  );
 
                   return (
                     <td
-                      className="text-center cursor-pointer hover:bg-blue-50"
-                      onClick={() => handleCellClick(record, field)}
-                      style={cellStyle}
-                      title="Click to edit"
+                      className="text-center cursor-pointer hover:bg-blue-50 relative"
+                      onClick={() => {
+                        if (!isEditing) {
+                          handleCellClick(record, field);
+                        }
+                      }}
+                      style={
+                        isEditing ? { padding: 0, overflow: "visible" } : {}
+                      }
+                      title={!isEditing ? "Click to select" : ""}
                     >
                       {isEditing ? (
-                        <select
-                          value={String(
-                            (inlineEditData[field] as string) ||
-                              record[field] ||
-                              defaultValue,
-                          )}
-                          onChange={(e) =>
-                            saveFieldDirectly(field, e.target.value)
-                          }
-                          onKeyDown={(e) => {
-                            if (e.key === "Escape") cancelInlineEdit();
-                          }}
-                          autoFocus
-                          className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                        >
-                          {options.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
+                        <CellDropdown
+                          options={options}
+                          value={currentValue}
+                          onChange={(value) => saveFieldDirectly(field, value)}
+                          onClose={cancelInlineEdit}
+                          placeholder={defaultValue}
+                        />
                       ) : (
-                        <span className="flex items-center justify-between gap-1">
-                          <span>
-                            {(record[field] as string) === "file chosen" ||
-                            (record[field] as string) === "file chosen"
-                              ? defaultValue
-                              : (record[field] as string) || defaultValue}
-                          </span>
-                          <FiChevronDown className="text-blue-600" size={14} />
+                        <span className="flex items-center justify-between gap-1 px-2 py-1">
+                          <span className="text-xs">{currentValue}</span>
+                          <FiChevronDown
+                            className="text-blue-600 flex-shrink-0"
+                            size={14}
+                          />
                         </span>
                       )}
                     </td>
