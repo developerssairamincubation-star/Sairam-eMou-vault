@@ -26,6 +26,8 @@ import {
   FiLogOut,
   FiGrid,
   FiList,
+  FiCalendar,
+  FiChevronDown,
 } from "react-icons/fi";
 import { MdDashboard, MdAdminPanelSettings } from "react-icons/md";
 
@@ -855,12 +857,15 @@ function HomePage() {
 
     setUploadingDoc({ recordId, field });
     try {
-      // Delete old file from Cloudinary if replacing
+      // Delete old file from Cloudinary if replacing (non-blocking)
       const existingRecord = records.find((r) => r.id === recordId);
       const oldUrl = existingRecord?.[field];
       if (oldUrl && firebaseUser) {
         const idToken = await firebaseUser.getIdToken();
-        await deleteFromCloudinary(oldUrl, idToken);
+        // Don't block on delete - proceed with upload even if delete fails
+        deleteFromCloudinary(oldUrl, idToken).catch((err) => {
+          console.warn("Failed to delete old file (non-critical):", err);
+        });
       }
 
       const result = await uploadToCloudinary(file);
@@ -903,12 +908,47 @@ function HomePage() {
     switch (status) {
       case "Active":
         return "bg-green-100 text-green-800";
+      case "Expiring":
+        return "bg-yellow-100 text-yellow-800";
       case "Expired":
         return "bg-red-100 text-red-800";
       case "Renewal Pending":
         return "bg-orange-100 text-orange-800";
       default:
         return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  // Calculate display status - shows "Expiring" instead of "Active" for records expiring within 2 months
+  const getDisplayStatus = (record: EMoURecord): string => {
+    if (record.status !== "Active") return record.status;
+
+    const toDate = record.toDate;
+    if (
+      !toDate ||
+      toDate.toLowerCase().includes("perpetual") ||
+      toDate.toLowerCase().includes("indefinite")
+    ) {
+      return "Active";
+    }
+
+    try {
+      const parsedDate = parseDate(toDate);
+      parsedDate.setHours(0, 0, 0, 0);
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const twoMonthsFromNow = new Date(today);
+      twoMonthsFromNow.setMonth(twoMonthsFromNow.getMonth() + 2);
+
+      // If expiry date is between today and 2 months from now, show "Expiring"
+      if (parsedDate > today && parsedDate <= twoMonthsFromNow) {
+        return "Expiring";
+      }
+      return "Active";
+    } catch {
+      return "Active";
     }
   };
 
@@ -1244,197 +1284,354 @@ function HomePage() {
 
               {/* Scrollable Table Container */}
               <div
-                className="overflow-auto bg-white rounded-lg shadow-sm relative"
+                className="bg-white rounded-lg shadow-sm border border-gray-200"
                 style={{
-                  cursor: isDragging ? "grabbing" : "grab",
-                  maxHeight: "calc(100vh - 300px)",
+                  height: "calc(100vh - 220px)",
+                  minHeight: "400px",
+                  display: "flex",
+                  flexDirection: "column",
                 }}
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseLeave}
               >
-                <style jsx>{`
-                  .sheet-table td {
-                    max-width: 300px;
-                    overflow-x: auto;
-                    white-space: nowrap;
-                  }
-                  .sheet-table td::-webkit-scrollbar {
-                    height: 4px;
-                  }
-                  .sheet-table td::-webkit-scrollbar-thumb {
-                    background: #cbd5e0;
-                    border-radius: 2px;
-                  }
-                `}</style>
-                <table className="sheet-table">
-                  <thead className="sticky top-0 z-10 bg-white shadow-sm">
-                    <tr>
-                      <th style={{ width: "60px" }}>S.No</th>
-                      <th style={{ width: "100px" }}>ID</th>
-                      <th style={{ minWidth: "200px" }}>Company Name</th>
-                      <th style={{ width: "100px" }}>Department</th>
-                      <th style={{ width: "120px" }}>Scope</th>
-                      <th style={{ width: "140px" }}>Maintained By</th>
-                      <th style={{ width: "100px" }}>From Date</th>
-                      <th style={{ width: "100px" }}>To Date</th>
-                      <th style={{ width: "110px" }}>Status</th>
-                      <th style={{ minWidth: "250px" }}>Description</th>
-                      <th style={{ minWidth: "200px" }}>About Company</th>
-                      <th style={{ minWidth: "200px" }}>Company Address</th>
-                      <th style={{ width: "180px" }}>Company Website</th>
-                      <th style={{ width: "90px" }}>Relationship</th>
-                      <th style={{ width: "150px" }}>Industry Contact</th>
-                      <th style={{ width: "120px" }}>Industry Mobile</th>
-                      <th style={{ width: "180px" }}>Industry Email</th>
-                      <th style={{ width: "150px" }}>Institution Contact</th>
-                      <th style={{ width: "120px" }}>Institution Mobile</th>
-                      <th style={{ width: "180px" }}>Institution Email</th>
-                      <th style={{ width: "150px" }}>Clubs Aligned</th>
-                      <th style={{ width: "150px" }}>SDG Goals</th>
-                      <th style={{ minWidth: "200px" }}>Skills/Technologies</th>
-                      <th style={{ width: "90px" }}>Per Student Cost</th>
-                      <th style={{ width: "90px" }}>Placement</th>
-                      <th style={{ width: "90px" }}>Internship</th>
-                      <th style={{ width: "80px" }}>Renewal</th>
-                      <th style={{ minWidth: "200px" }}>Benefits Achieved</th>
-                      <th style={{ width: "150px" }}>Doc Availability</th>
-                      <th style={{ width: "180px" }}>HO Approval</th>
-                      <th style={{ width: "180px" }}>Signed Agreement</th>
-                      <th style={{ width: "120px" }}>Created By</th>
-                      <th style={{ width: "100px" }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {records.map((record, index) => {
-                      const globalIndex =
-                        (currentPage - 1) * itemsPerPage + index;
-                      const isEditable = canEdit(
-                        record.createdBy,
-                        record.department,
-                      );
+                <div
+                  className="flex-1 overflow-auto"
+                  style={{
+                    cursor: isDragging ? "grabbing" : "grab",
+                  }}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseLeave}
+                >
+                  <style jsx>{`
+                    .sheet-table {
+                      min-width: 4000px;
+                      border-collapse: collapse;
+                    }
+                    .sheet-table th,
+                    .sheet-table td {
+                      padding: 4px 8px;
+                      font-size: 11px;
+                    }
+                    .sheet-table th {
+                      font-size: 10px;
+                      text-transform: uppercase;
+                      letter-spacing: 0.5px;
+                    }
+                    .sheet-table td {
+                      max-width: 300px;
+                      overflow-x: auto;
+                      white-space: nowrap;
+                    }
+                    .sheet-table td::-webkit-scrollbar {
+                      height: 3px;
+                    }
+                    .sheet-table td::-webkit-scrollbar-thumb {
+                      background: #cbd5e0;
+                      border-radius: 2px;
+                    }
+                    .sheet-table tbody tr {
+                      height: 35.5px;
+                    }
+                  `}</style>
+                  <table className="sheet-table">
+                    <thead className="sticky top-0 z-10 bg-white shadow-sm">
+                      <tr>
+                        <th style={{ width: "60px" }}>S.No</th>
+                        <th style={{ width: "100px" }}>ID</th>
+                        <th style={{ minWidth: "200px" }}>Company Name</th>
+                        <th style={{ width: "100px" }}>Department</th>
+                        <th style={{ width: "120px" }}>Scope</th>
+                        <th style={{ width: "140px" }}>Maintained By</th>
+                        <th style={{ width: "100px" }}>From Date</th>
+                        <th style={{ width: "100px" }}>To Date</th>
+                        <th style={{ width: "110px" }}>Status</th>
+                        <th style={{ minWidth: "250px" }}>Description</th>
+                        <th style={{ minWidth: "200px" }}>About Company</th>
+                        <th style={{ minWidth: "200px" }}>Company Address</th>
+                        <th style={{ width: "180px" }}>Company Website</th>
+                        <th style={{ width: "90px" }}>Relationship</th>
+                        <th style={{ width: "150px" }}>Industry Contact</th>
+                        <th style={{ width: "120px" }}>Industry Mobile</th>
+                        <th style={{ width: "180px" }}>Industry Email</th>
+                        <th style={{ width: "150px" }}>Institution Contact</th>
+                        <th style={{ width: "120px" }}>Institution Mobile</th>
+                        <th style={{ width: "180px" }}>Institution Email</th>
+                        <th style={{ width: "150px" }}>Clubs Aligned</th>
+                        <th style={{ width: "150px" }}>SDG Goals</th>
+                        <th style={{ minWidth: "200px" }}>
+                          Skills/Technologies
+                        </th>
+                        <th style={{ width: "90px" }}>Per Student Cost</th>
+                        <th style={{ width: "90px" }}>Placement</th>
+                        <th style={{ width: "90px" }}>Internship</th>
+                        <th style={{ width: "80px" }}>Renewal</th>
+                        <th style={{ minWidth: "200px" }}>Benefits Achieved</th>
+                        <th style={{ width: "150px" }}>Doc Availability</th>
+                        <th style={{ width: "180px" }}>HO Approval</th>
+                        <th style={{ width: "180px" }}>Signed Agreement</th>
+                        <th style={{ width: "120px" }}>Created By</th>
+                        <th style={{ width: "100px" }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {records.map((record, index) => {
+                        const globalIndex =
+                          (currentPage - 1) * itemsPerPage + index;
+                        const isEditable = canEdit(
+                          record.createdBy,
+                          record.department,
+                        );
 
-                      const renderEditableCell = (
-                        field: keyof EMoURecord,
-                        content: React.ReactNode,
-                        className: string = "text-xs",
-                        truncateLength?: number,
-                      ) => {
-                        const isEditing =
-                          editingCell?.recordId === record.id &&
-                          editingCell?.field === field;
-                        const cellStyle = isEditing
-                          ? {
-                              border: "3px solid #000000",
-                              outline: "none",
-                              padding: "4px",
-                              backgroundColor: "#f5f5f5",
-                            }
-                          : {};
+                        // Helper function to get field type icon
+                        const getFieldTypeIcon = (field: keyof EMoURecord) => {
+                          const dateFields = ["fromDate", "toDate"];
+                          const selectFields = [
+                            "scope",
+                            "maintainedBy",
+                            "department",
+                            "goingForRenewal",
+                            "documentAvailability",
+                          ];
+                          const numberFields = [
+                            "placementOpportunity",
+                            "internshipOpportunity",
+                            "perStudentCost",
+                          ];
+                          // Large text fields that shouldn't show icons
+                          const largeTextFields = [
+                            "description",
+                            "aboutCompany",
+                            "companyAddress",
+                            "benefitsAchieved",
+                            "skillsTechnologies",
+                            "companyWebsite",
+                            "industryContactEmail",
+                            "institutionContactEmail",
+                          ];
 
-                        let displayContent = content;
-                        if (
-                          truncateLength &&
-                          typeof content === "string" &&
-                          content.length > truncateLength
-                        ) {
-                          displayContent =
-                            content.substring(0, truncateLength) + "...";
-                        }
+                          if (largeTextFields.includes(field as string)) {
+                            return null;
+                          } else if (dateFields.includes(field as string)) {
+                            return (
+                              <FiCalendar
+                                className="inline-block ml-1 text-blue-500"
+                                size={12}
+                              />
+                            );
+                          } else if (selectFields.includes(field as string)) {
+                            return (
+                              <FiChevronDown
+                                className="inline-block ml-1 text-blue-600"
+                                size={14}
+                              />
+                            );
+                          } else if (numberFields.includes(field as string)) {
+                            return (
+                              <span
+                                className="inline-block ml-1 text-orange-600 font-bold"
+                                style={{ fontSize: "10px" }}
+                              >
+                                123
+                              </span>
+                            );
+                          } else {
+                            return null;
+                          }
+                        };
 
-                        // Filter out invalid placeholder values
-                        if (displayContent === "file chosen") {
-                          displayContent = "";
-                        }
+                        const renderEditableCell = (
+                          field: keyof EMoURecord,
+                          content: React.ReactNode,
+                          className: string = "text-xs",
+                          truncateLength?: number,
+                        ) => {
+                          const isEditing =
+                            editingCell?.recordId === record.id &&
+                            editingCell?.field === field;
+                          const cellStyle = isEditing
+                            ? {
+                                border: "3px solid #000000",
+                                outline: "none",
+                                padding: "4px",
+                                backgroundColor: "#f5f5f5",
+                              }
+                            : {};
+
+                          let displayContent = content;
+                          if (
+                            truncateLength &&
+                            typeof content === "string" &&
+                            content.length > truncateLength
+                          ) {
+                            displayContent =
+                              content.substring(0, truncateLength) + "...";
+                          }
+
+                          // Filter out invalid placeholder values
+                          if (displayContent === "file chosen") {
+                            displayContent = "";
+                          }
+
+                          return (
+                            <td
+                              className={`${className} ${isEditable ? "cursor-text hover:bg-blue-50" : ""}`}
+                              contentEditable={isEditing}
+                              suppressContentEditableWarning
+                              onClick={() =>
+                                isEditable && handleCellClick(record, field)
+                              }
+                              onBlur={(e) => {
+                                if (isEditing) {
+                                  handleInlineFieldChange(
+                                    field,
+                                    e.currentTarget.textContent || "",
+                                  );
+                                }
+                              }}
+                              style={cellStyle}
+                              title={
+                                truncateLength && typeof content === "string"
+                                  ? content
+                                  : isEditable && !isEditing
+                                    ? "Click to edit"
+                                    : ""
+                              }
+                            >
+                              <span className="flex items-center justify-between gap-1">
+                                <span>{displayContent}</span>
+                                {!isEditing && getFieldTypeIcon(field)}
+                              </span>
+                            </td>
+                          );
+                        };
 
                         return (
-                          <td
-                            className={`${className} ${isEditable ? "cursor-text hover:bg-blue-50" : ""}`}
-                            contentEditable={isEditing}
-                            suppressContentEditableWarning
-                            onClick={() =>
-                              isEditable && handleCellClick(record, field)
-                            }
-                            onBlur={(e) => {
-                              if (isEditing) {
-                                handleInlineFieldChange(
-                                  field,
-                                  e.currentTarget.textContent || "",
-                                );
-                              }
-                            }}
-                            style={cellStyle}
-                            title={
-                              truncateLength && typeof content === "string"
-                                ? content
-                                : isEditable && !isEditing
-                                  ? "Click to edit"
-                                  : ""
-                            }
-                          >
-                            {displayContent}
-                          </td>
-                        );
-                      };
+                          <tr key={record.id} className="hover:bg-gray-50">
+                            <td className="text-center text-xs text-[#6b7280]">
+                              {globalIndex + 1}
+                            </td>
+                            <td className="font-medium text-[#2563eb] font-mono">
+                              {record.id}
+                            </td>
+                            {renderEditableCell(
+                              "companyName",
+                              record.companyName,
+                              "",
+                            )}
+                            {(() => {
+                              const maintainedByValue =
+                                record.maintainedBy || "Departments";
+                              const isDeptEditable =
+                                maintainedByValue === "Departments";
+                              const isEditing =
+                                editingCell?.recordId === record.id &&
+                                editingCell?.field === "department";
+                              const cellStyle = isEditing
+                                ? {
+                                    border: "3px solid #000000",
+                                    outline: "none",
+                                    padding: "4px",
+                                    backgroundColor: "#f5f5f5",
+                                  }
+                                : {};
 
-                      return (
-                        <tr key={record.id} className="hover:bg-gray-50">
-                          <td className="text-center text-xs text-[#6b7280]">
-                            {globalIndex + 1}
-                          </td>
-                          <td className="font-medium text-[#2563eb] font-mono">
-                            {record.id}
-                          </td>
-                          {renderEditableCell(
-                            "companyName",
-                            record.companyName,
-                            "",
-                          )}
-                          {(() => {
-                            const maintainedByValue =
-                              record.maintainedBy || "Departments";
-                            const isDeptEditable =
-                              maintainedByValue === "Departments";
-                            const isEditing =
-                              editingCell?.recordId === record.id &&
-                              editingCell?.field === "department";
-                            const cellStyle = isEditing
-                              ? {
-                                  border: "3px solid #000000",
-                                  outline: "none",
-                                  padding: "4px",
-                                  backgroundColor: "#f5f5f5",
-                                }
-                              : {};
+                              return (
+                                <td
+                                  className={`text-xs ${isEditable && isDeptEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
+                                  onClick={() =>
+                                    isEditable &&
+                                    isDeptEditable &&
+                                    handleCellClick(record, "department")
+                                  }
+                                  style={cellStyle}
+                                  title={
+                                    isDeptEditable
+                                      ? isEditable && !isEditing
+                                        ? "Click to edit"
+                                        : ""
+                                      : `Set by Maintained By: ${maintainedByValue}`
+                                  }
+                                >
+                                  {isDeptEditable ? (
+                                    isEditing ? (
+                                      <select
+                                        value={
+                                          (inlineEditData.department as string) ||
+                                          record.department
+                                        }
+                                        onChange={(e) =>
+                                          saveFieldDirectly(
+                                            "department",
+                                            e.target.value,
+                                          )
+                                        }
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Escape")
+                                            cancelInlineEdit();
+                                        }}
+                                        autoFocus
+                                        className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                      >
+                                        {departments.map((dept) => (
+                                          <option key={dept} value={dept}>
+                                            {dept}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    ) : (
+                                      <span className="flex items-center justify-between gap-1">
+                                        <span>{record.department}</span>
+                                        <FiChevronDown
+                                          className="text-blue-600"
+                                          size={14}
+                                        />
+                                      </span>
+                                    )
+                                  ) : (
+                                    <span className="text-[#6b7280] italic">
+                                      {maintainedByValue}
+                                    </span>
+                                  )}
+                                </td>
+                              );
+                            })()}
+                            {(() => {
+                              const isEditing =
+                                editingCell?.recordId === record.id &&
+                                editingCell?.field === "scope";
+                              const cellStyle = isEditing
+                                ? {
+                                    border: "3px solid #000000",
+                                    outline: "none",
+                                    padding: "4px",
+                                    backgroundColor: "#f5f5f5",
+                                  }
+                                : {};
 
-                            return (
-                              <td
-                                className={`text-xs ${isEditable && isDeptEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
-                                onClick={() =>
-                                  isEditable &&
-                                  isDeptEditable &&
-                                  handleCellClick(record, "department")
-                                }
-                                style={cellStyle}
-                                title={
-                                  isDeptEditable
-                                    ? isEditable && !isEditing
+                              return (
+                                <td
+                                  className={`text-center ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
+                                  onClick={() =>
+                                    isEditable &&
+                                    handleCellClick(record, "scope")
+                                  }
+                                  style={cellStyle}
+                                  title={
+                                    isEditable && !isEditing
                                       ? "Click to edit"
                                       : ""
-                                    : `Set by Maintained By: ${maintainedByValue}`
-                                }
-                              >
-                                {isDeptEditable ? (
-                                  isEditing ? (
+                                  }
+                                >
+                                  {isEditing ? (
                                     <select
                                       value={
-                                        (inlineEditData.department as string) ||
-                                        record.department
+                                        inlineEditData.scope ||
+                                        record.scope ||
+                                        "National"
                                       }
                                       onChange={(e) =>
                                         saveFieldDirectly(
-                                          "department",
+                                          "scope",
                                           e.target.value,
                                         )
                                       }
@@ -1445,846 +1642,820 @@ function HomePage() {
                                       autoFocus
                                       className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
                                     >
-                                      {departments.map((dept) => (
-                                        <option key={dept} value={dept}>
-                                          {dept}
-                                        </option>
-                                      ))}
+                                      <option value="National">National</option>
+                                      <option value="International">
+                                        International
+                                      </option>
                                     </select>
                                   ) : (
-                                    record.department
-                                  )
-                                ) : (
-                                  <span className="text-[#6b7280] italic">
-                                    {maintainedByValue}
-                                  </span>
-                                )}
-                              </td>
-                            );
-                          })()}
-                          {(() => {
-                            const isEditing =
-                              editingCell?.recordId === record.id &&
-                              editingCell?.field === "scope";
-                            const cellStyle = isEditing
-                              ? {
-                                  border: "3px solid #000000",
-                                  outline: "none",
-                                  padding: "4px",
-                                  backgroundColor: "#f5f5f5",
-                                }
-                              : {};
+                                    <span className="flex items-center justify-between gap-1">
+                                      <span>{record.scope || "National"}</span>
+                                      <FiChevronDown
+                                        className="text-blue-600"
+                                        size={14}
+                                      />
+                                    </span>
+                                  )}
+                                </td>
+                              );
+                            })()}
+                            {(() => {
+                              const isEditing =
+                                editingCell?.recordId === record.id &&
+                                editingCell?.field === "maintainedBy";
+                              const cellStyle = isEditing
+                                ? {
+                                    border: "3px solid #000000",
+                                    outline: "none",
+                                    padding: "4px",
+                                    backgroundColor: "#f5f5f5",
+                                  }
+                                : {};
 
-                            return (
-                              <td
-                                className={`text-center ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
-                                onClick={() =>
-                                  isEditable && handleCellClick(record, "scope")
-                                }
-                                style={cellStyle}
-                                title={
-                                  isEditable && !isEditing
-                                    ? "Click to edit"
-                                    : ""
-                                }
-                              >
-                                {isEditing ? (
-                                  <select
-                                    value={
-                                      inlineEditData.scope ||
-                                      record.scope ||
-                                      "National"
-                                    }
-                                    onChange={(e) =>
-                                      saveFieldDirectly("scope", e.target.value)
-                                    }
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Escape")
-                                        cancelInlineEdit();
-                                    }}
-                                    autoFocus
-                                    className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                  >
-                                    <option value="National">National</option>
-                                    <option value="International">
-                                      International
-                                    </option>
-                                  </select>
-                                ) : (
-                                  record.scope || "National"
-                                )}
-                              </td>
-                            );
-                          })()}
-                          {(() => {
-                            const isEditing =
-                              editingCell?.recordId === record.id &&
-                              editingCell?.field === "maintainedBy";
-                            const cellStyle = isEditing
-                              ? {
-                                  border: "3px solid #000000",
-                                  outline: "none",
-                                  padding: "4px",
-                                  backgroundColor: "#f5f5f5",
-                                }
-                              : {};
-
-                            return (
-                              <td
-                                className={`text-center ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
-                                onClick={() =>
-                                  isEditable &&
-                                  handleCellClick(record, "maintainedBy")
-                                }
-                                style={cellStyle}
-                                title={
-                                  isEditable && !isEditing
-                                    ? "Click to edit"
-                                    : ""
-                                }
-                              >
-                                {isEditing ? (
-                                  <select
-                                    value={
-                                      inlineEditData.maintainedBy ||
-                                      record.maintainedBy ||
-                                      "Departments"
-                                    }
-                                    onChange={(e) =>
-                                      saveFieldDirectly(
-                                        "maintainedBy",
-                                        e.target.value,
-                                      )
-                                    }
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Escape")
-                                        cancelInlineEdit();
-                                    }}
-                                    autoFocus
-                                    className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                  >
-                                    <option value="Institution">
-                                      Institution
-                                    </option>
-                                    <option value="Incubation">
-                                      Incubation
-                                    </option>
-                                    <option value="Departments">
-                                      Departments
-                                    </option>
-                                  </select>
-                                ) : (
-                                  record.maintainedBy || "Departments"
-                                )}
-                              </td>
-                            );
-                          })()}
-                          {(() => {
-                            const isEditing =
-                              editingCell?.recordId === record.id &&
-                              editingCell?.field === "fromDate";
-                            const cellStyle = isEditing
-                              ? {
-                                  border: "3px solid #000000",
-                                  outline: "none",
-                                  padding: "0",
-                                  backgroundColor: "#f5f5f5",
-                                }
-                              : {};
-
-                            // Convert dd.mm.yyyy to yyyy-mm-dd for date input
-                            const convertToInputFormat = (dateStr: string) => {
-                              if (!dateStr) return "";
-                              const [day, month, year] = dateStr.split(".");
-                              return `${year}-${month}-${day}`;
-                            };
-
-                            return (
-                              <td
-                                className={`${isEditable ? "cursor-text hover:bg-blue-50" : ""}`}
-                                onClick={() =>
-                                  isEditable &&
-                                  handleCellClick(record, "fromDate")
-                                }
-                                style={cellStyle}
-                                title={
-                                  isEditable && !isEditing
-                                    ? "Click to edit"
-                                    : ""
-                                }
-                              >
-                                {isEditing ? (
-                                  <input
-                                    type="date"
-                                    defaultValue={convertToInputFormat(
-                                      record.fromDate === "file chosen"
-                                        ? ""
-                                        : record.fromDate,
-                                    )}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      if (val) {
-                                        const [year, month, day] =
-                                          val.split("-");
-                                        handleInlineFieldChange(
-                                          "fromDate",
-                                          `${day}.${month}.${year}`,
-                                        );
+                              return (
+                                <td
+                                  className={`text-center ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
+                                  onClick={() =>
+                                    isEditable &&
+                                    handleCellClick(record, "maintainedBy")
+                                  }
+                                  style={cellStyle}
+                                  title={
+                                    isEditable && !isEditing
+                                      ? "Click to edit"
+                                      : ""
+                                  }
+                                >
+                                  {isEditing ? (
+                                    <select
+                                      value={
+                                        inlineEditData.maintainedBy ||
+                                        record.maintainedBy ||
+                                        "Departments"
                                       }
-                                    }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") {
-                                        saveInlineEdit();
-                                      } else if (e.key === "Escape") {
-                                        cancelInlineEdit();
+                                      onChange={(e) =>
+                                        saveFieldDirectly(
+                                          "maintainedBy",
+                                          e.target.value,
+                                        )
                                       }
-                                    }}
-                                    autoFocus
-                                    className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                  />
-                                ) : record.fromDate === "file chosen" ? (
-                                  ""
-                                ) : (
-                                  record.fromDate
-                                )}
-                              </td>
-                            );
-                          })()}
-                          {(() => {
-                            const isEditing =
-                              editingCell?.recordId === record.id &&
-                              editingCell?.field === "toDate";
-                            const cellStyle = isEditing
-                              ? {
-                                  border: "3px solid #000000",
-                                  outline: "none",
-                                  padding: "0",
-                                  backgroundColor: "#f5f5f5",
-                                }
-                              : {};
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Escape")
+                                          cancelInlineEdit();
+                                      }}
+                                      autoFocus
+                                      className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    >
+                                      <option value="Institution">
+                                        Institution
+                                      </option>
+                                      <option value="Incubation">
+                                        Incubation
+                                      </option>
+                                      <option value="Departments">
+                                        Departments
+                                      </option>
+                                    </select>
+                                  ) : (
+                                    <span className="flex items-center justify-between gap-1">
+                                      <span>
+                                        {record.maintainedBy || "Departments"}
+                                      </span>
+                                      <FiChevronDown
+                                        className="text-blue-600"
+                                        size={14}
+                                      />
+                                    </span>
+                                  )}
+                                </td>
+                              );
+                            })()}
+                            {(() => {
+                              const isEditing =
+                                editingCell?.recordId === record.id &&
+                                editingCell?.field === "fromDate";
+                              const cellStyle = isEditing
+                                ? {
+                                    border: "3px solid #000000",
+                                    outline: "none",
+                                    padding: "0",
+                                    backgroundColor: "#f5f5f5",
+                                  }
+                                : {};
 
-                            // Convert dd.mm.yyyy to yyyy-mm-dd for date input
-                            const convertToInputFormat = (dateStr: string) => {
-                              if (!dateStr) return "";
-                              const [day, month, year] = dateStr.split(".");
-                              return `${year}-${month}-${day}`;
-                            };
+                              // Convert dd.mm.yyyy to yyyy-mm-dd for date input
+                              const convertToInputFormat = (
+                                dateStr: string,
+                              ) => {
+                                if (!dateStr) return "";
+                                const [day, month, year] = dateStr.split(".");
+                                return `${year}-${month}-${day}`;
+                              };
 
-                            return (
-                              <td
-                                className={`${isEditable ? "cursor-text hover:bg-blue-50" : ""}`}
-                                onClick={() =>
-                                  isEditable &&
-                                  handleCellClick(record, "toDate")
-                                }
-                                style={cellStyle}
-                                title={
-                                  isEditable && !isEditing
-                                    ? "Click to edit"
-                                    : ""
-                                }
-                              >
-                                {isEditing ? (
-                                  <input
-                                    type="date"
-                                    defaultValue={convertToInputFormat(
-                                      record.toDate === "file chosen"
-                                        ? ""
-                                        : record.toDate,
-                                    )}
-                                    onChange={(e) => {
-                                      const val = e.target.value;
-                                      if (val) {
-                                        const [year, month, day] =
-                                          val.split("-");
-                                        handleInlineFieldChange(
-                                          "toDate",
-                                          `${day}.${month}.${year}`,
-                                        );
-                                      }
-                                    }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") {
-                                        saveInlineEdit();
-                                      } else if (e.key === "Escape") {
-                                        cancelInlineEdit();
-                                      }
-                                    }}
-                                    autoFocus
-                                    className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                  />
-                                ) : record.toDate === "file chosen" ? (
-                                  ""
-                                ) : (
-                                  record.toDate
-                                )}
-                              </td>
-                            );
-                          })()}
-                          {(() => {
-                            const isEditing =
-                              editingCell?.recordId === record.id &&
-                              editingCell?.field === "status";
-                            const cellStyle = isEditing
-                              ? {
-                                  border: "3px solid #000000",
-                                  outline: "none",
-                                  padding: "4px",
-                                  backgroundColor: "#f5f5f5",
-                                }
-                              : {};
+                              return (
+                                <td
+                                  className={`${isEditable ? "cursor-text hover:bg-blue-50" : ""}`}
+                                  onClick={() =>
+                                    isEditable &&
+                                    handleCellClick(record, "fromDate")
+                                  }
+                                  style={cellStyle}
+                                  title={
+                                    isEditable && !isEditing
+                                      ? "Click to edit"
+                                      : ""
+                                  }
+                                >
+                                  {isEditing ? (
+                                    <input
+                                      type="date"
+                                      defaultValue={convertToInputFormat(
+                                        record.fromDate === "file chosen"
+                                          ? ""
+                                          : record.fromDate,
+                                      )}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val) {
+                                          const [year, month, day] =
+                                            val.split("-");
+                                          handleInlineFieldChange(
+                                            "fromDate",
+                                            `${day}.${month}.${year}`,
+                                          );
+                                        }
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          saveInlineEdit();
+                                        } else if (e.key === "Escape") {
+                                          cancelInlineEdit();
+                                        }
+                                      }}
+                                      autoFocus
+                                      className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    />
+                                  ) : record.fromDate === "file chosen" ? (
+                                    ""
+                                  ) : (
+                                    <span className="flex items-center justify-between gap-1">
+                                      <span>{record.fromDate}</span>
+                                      <FiCalendar
+                                        className="text-blue-500"
+                                        size={12}
+                                      />
+                                    </span>
+                                  )}
+                                </td>
+                              );
+                            })()}
+                            {(() => {
+                              const isEditing =
+                                editingCell?.recordId === record.id &&
+                                editingCell?.field === "toDate";
+                              const cellStyle = isEditing
+                                ? {
+                                    border: "3px solid #000000",
+                                    outline: "none",
+                                    padding: "0",
+                                    backgroundColor: "#f5f5f5",
+                                  }
+                                : {};
 
-                            return (
-                              <td
-                                className={`${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
-                                onClick={() =>
-                                  isEditable &&
-                                  handleCellClick(record, "status")
-                                }
-                                style={cellStyle}
-                                title={
-                                  isEditable && !isEditing
-                                    ? "Click to edit"
-                                    : ""
-                                }
-                              >
-                                {isEditing ? (
-                                  <select
-                                    value={
-                                      inlineEditData.status || record.status
-                                    }
-                                    onChange={(e) =>
-                                      saveFieldDirectly(
-                                        "status",
-                                        e.target.value,
-                                      )
-                                    }
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Escape")
-                                        cancelInlineEdit();
-                                    }}
-                                    autoFocus
-                                    className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                  >
-                                    <option value="Active">Active</option>
-                                    <option value="Expired">Expired</option>
-                                    <option value="Renewal Pending">
-                                      Renewal Pending
-                                    </option>
-                                    <option value="Draft">Draft</option>
-                                  </select>
-                                ) : (
+                              // Convert dd.mm.yyyy to yyyy-mm-dd for date input
+                              const convertToInputFormat = (
+                                dateStr: string,
+                              ) => {
+                                if (!dateStr) return "";
+                                const [day, month, year] = dateStr.split(".");
+                                return `${year}-${month}-${day}`;
+                              };
+
+                              return (
+                                <td
+                                  className={`${isEditable ? "cursor-text hover:bg-blue-50" : ""}`}
+                                  onClick={() =>
+                                    isEditable &&
+                                    handleCellClick(record, "toDate")
+                                  }
+                                  style={cellStyle}
+                                  title={
+                                    isEditable && !isEditing
+                                      ? "Click to edit"
+                                      : ""
+                                  }
+                                >
+                                  {isEditing ? (
+                                    <input
+                                      type="date"
+                                      defaultValue={convertToInputFormat(
+                                        record.toDate === "file chosen"
+                                          ? ""
+                                          : record.toDate,
+                                      )}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val) {
+                                          const [year, month, day] =
+                                            val.split("-");
+                                          handleInlineFieldChange(
+                                            "toDate",
+                                            `${day}.${month}.${year}`,
+                                          );
+                                        }
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          saveInlineEdit();
+                                        } else if (e.key === "Escape") {
+                                          cancelInlineEdit();
+                                        }
+                                      }}
+                                      autoFocus
+                                      className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    />
+                                  ) : record.toDate === "file chosen" ? (
+                                    ""
+                                  ) : (
+                                    <span className="flex items-center justify-between gap-1">
+                                      <span>{record.toDate}</span>
+                                      <FiCalendar
+                                        className="text-blue-500"
+                                        size={12}
+                                      />
+                                    </span>
+                                  )}
+                                </td>
+                              );
+                            })()}
+                            {(() => {
+                              const displayStatus = getDisplayStatus(record);
+                              return (
+                                <td
+                                  className="text-center"
+                                  title="Status is auto-calculated based on expiry date"
+                                >
                                   <span
-                                    className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(record.status)}`}
+                                    className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(displayStatus)}`}
                                   >
-                                    {record.status}
+                                    {displayStatus}
                                   </span>
-                                )}
-                              </td>
-                            );
-                          })()}
-                          {renderEditableCell(
-                            "description",
-                            record.description,
-                            "text-xs",
-                            80,
-                          )}
-                          {renderEditableCell(
-                            "aboutCompany",
-                            record.aboutCompany || "-",
-                            "text-xs",
-                            50,
-                          )}
-                          {renderEditableCell(
-                            "companyAddress",
-                            record.companyAddress || "-",
-                            "text-xs",
-                            50,
-                          )}
-                          {(() => {
-                            const isEditing =
-                              editingCell?.recordId === record.id &&
-                              editingCell?.field === "companyWebsite";
-                            const cellStyle = isEditing
-                              ? {
-                                  border: "3px solid #000000",
-                                  outline: "none",
-                                  padding: "4px",
-                                  backgroundColor: "#f5f5f5",
-                                }
-                              : {};
-
-                            return (
-                              <td
-                                className={`text-xs ${isEditable ? "cursor-text hover:bg-blue-50" : ""}`}
-                                contentEditable={isEditing}
-                                suppressContentEditableWarning
-                                onClick={() =>
-                                  isEditable &&
-                                  handleCellClick(record, "companyWebsite")
-                                }
-                                onBlur={(e) => {
-                                  if (isEditing) {
-                                    handleInlineFieldChange(
-                                      "companyWebsite",
-                                      e.currentTarget.textContent || "",
-                                    );
+                                </td>
+                              );
+                            })()}
+                            {renderEditableCell(
+                              "description",
+                              record.description,
+                              "text-xs",
+                              80,
+                            )}
+                            {renderEditableCell(
+                              "aboutCompany",
+                              record.aboutCompany || "-",
+                              "text-xs",
+                              50,
+                            )}
+                            {renderEditableCell(
+                              "companyAddress",
+                              record.companyAddress || "-",
+                              "text-xs",
+                              50,
+                            )}
+                            {(() => {
+                              const isEditing =
+                                editingCell?.recordId === record.id &&
+                                editingCell?.field === "companyWebsite";
+                              const cellStyle = isEditing
+                                ? {
+                                    border: "3px solid #000000",
+                                    outline: "none",
+                                    padding: "4px",
+                                    backgroundColor: "#f5f5f5",
                                   }
-                                }}
-                                style={cellStyle}
-                                title={
-                                  isEditable && !isEditing
-                                    ? "Click to edit"
-                                    : ""
-                                }
-                              >
-                                {isEditing ? (
-                                  record.companyWebsite || ""
-                                ) : record.companyWebsite ? (
-                                  <a
-                                    href={record.companyWebsite}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-blue-600 hover:underline"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                    }}
-                                  >
-                                    {record.companyWebsite.length > 30
-                                      ? record.companyWebsite.substring(0, 30) +
-                                        "..."
-                                      : record.companyWebsite}
-                                  </a>
-                                ) : (
-                                  "-"
-                                )}
-                              </td>
-                            );
-                          })()}
-                          {(() => {
-                            const isEditing =
-                              editingCell?.recordId === record.id &&
-                              editingCell?.field === "companyRelationship";
-                            const cellStyle = isEditing
-                              ? {
-                                  border: "3px solid #000000",
-                                  outline: "none",
-                                  padding: "4px",
-                                  backgroundColor: "#f5f5f5",
-                                }
-                              : {};
+                                : {};
 
-                            return (
-                              <td
-                                className={`text-center ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
-                                onClick={() =>
-                                  isEditable &&
-                                  handleCellClick(record, "companyRelationship")
-                                }
-                                style={cellStyle}
-                                title={
-                                  isEditable && !isEditing
-                                    ? "Click to edit"
-                                    : ""
-                                }
-                              >
-                                {isEditing ? (
-                                  <select
-                                    value={
-                                      inlineEditData.companyRelationship ||
-                                      record.companyRelationship ||
-                                      3
-                                    }
-                                    onChange={(e) =>
-                                      saveFieldDirectly(
-                                        "companyRelationship",
-                                        parseInt(e.target.value),
-                                      )
-                                    }
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Escape")
-                                        cancelInlineEdit();
-                                    }}
-                                    autoFocus
-                                    className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                  >
-                                    <option value={1}>1 - Poor</option>
-                                    <option value={2}>2 - Fair</option>
-                                    <option value={3}>3 - Good</option>
-                                    <option value={4}>4 - Very Good</option>
-                                    <option value={5}>5 - Excellent</option>
-                                  </select>
-                                ) : (
-                                  record.companyRelationship || 3
-                                )}
-                              </td>
-                            );
-                          })()}
-                          {renderEditableCell(
-                            "industryContactName",
-                            record.industryContactName || "-",
-                            "text-xs",
-                          )}
-                          {renderEditableCell(
-                            "industryContactMobile",
-                            record.industryContactMobile || "-",
-                            "text-xs",
-                          )}
-                          {renderEditableCell(
-                            "industryContactEmail",
-                            record.industryContactEmail || "-",
-                            "text-xs",
-                          )}
-                          {renderEditableCell(
-                            "institutionContactName",
-                            record.institutionContactName || "-",
-                            "text-xs",
-                          )}
-                          {renderEditableCell(
-                            "institutionContactMobile",
-                            record.institutionContactMobile || "-",
-                            "text-xs",
-                          )}
-                          {renderEditableCell(
-                            "institutionContactEmail",
-                            record.institutionContactEmail || "-",
-                            "text-xs",
-                          )}
-                          {renderEditableCell(
-                            "clubsAligned",
-                            record.clubsAligned || "-",
-                            "text-xs",
-                          )}
-                          {renderEditableCell(
-                            "sdgGoals",
-                            record.sdgGoals || "-",
-                            "text-xs",
-                          )}
-                          {renderEditableCell(
-                            "skillsTechnologies",
-                            record.skillsTechnologies || "-",
-                            "text-xs",
-                            50,
-                          )}
-                          {renderEditableCell(
-                            "perStudentCost",
-                            record.perStudentCost || 0,
-                            "text-center",
-                          )}
-                          {renderEditableCell(
-                            "placementOpportunity",
-                            record.placementOpportunity || 0,
-                            "text-center",
-                          )}
-                          {renderEditableCell(
-                            "internshipOpportunity",
-                            record.internshipOpportunity || 0,
-                            "text-center",
-                          )}
-                          {(() => {
-                            const isEditing =
-                              editingCell?.recordId === record.id &&
-                              editingCell?.field === "goingForRenewal";
-                            const cellStyle = isEditing
-                              ? {
-                                  border: "3px solid #000000",
-                                  outline: "none",
-                                  padding: "4px",
-                                  backgroundColor: "#f5f5f5",
-                                }
-                              : {};
-
-                            return (
-                              <td
-                                className={`text-center ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
-                                onClick={() =>
-                                  isEditable &&
-                                  handleCellClick(record, "goingForRenewal")
-                                }
-                                style={cellStyle}
-                                title={
-                                  isEditable && !isEditing
-                                    ? "Click to edit"
-                                    : ""
-                                }
-                              >
-                                {isEditing ? (
-                                  <select
-                                    value={
-                                      inlineEditData.goingForRenewal ||
-                                      record.goingForRenewal ||
-                                      "No"
-                                    }
-                                    onChange={(e) =>
-                                      saveFieldDirectly(
-                                        "goingForRenewal",
-                                        e.target.value,
-                                      )
-                                    }
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Escape")
-                                        cancelInlineEdit();
-                                    }}
-                                    autoFocus
-                                    className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                  >
-                                    <option value="Yes">Yes</option>
-                                    <option value="No">No</option>
-                                  </select>
-                                ) : (
-                                  record.goingForRenewal || "No"
-                                )}
-                              </td>
-                            );
-                          })()}
-                          {renderEditableCell(
-                            "benefitsAchieved",
-                            record.benefitsAchieved || "-",
-                            "text-xs",
-                            50,
-                          )}
-                          {(() => {
-                            const isEditing =
-                              editingCell?.recordId === record.id &&
-                              editingCell?.field === "documentAvailability";
-                            const cellStyle = isEditing
-                              ? {
-                                  border: "3px solid #000000",
-                                  outline: "none",
-                                  padding: "4px",
-                                  backgroundColor: "#f5f5f5",
-                                }
-                              : {};
-
-                            return (
-                              <td
-                                className={`text-xs ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
-                                onClick={() =>
-                                  isEditable &&
-                                  handleCellClick(
-                                    record,
-                                    "documentAvailability",
-                                  )
-                                }
-                                style={cellStyle}
-                                title={
-                                  isEditable && !isEditing
-                                    ? "Click to edit"
-                                    : ""
-                                }
-                              >
-                                {isEditing ? (
-                                  <select
-                                    value={
-                                      inlineEditData.documentAvailability ||
-                                      record.documentAvailability ||
-                                      "Not Available"
-                                    }
-                                    onChange={(e) =>
-                                      saveFieldDirectly(
-                                        "documentAvailability",
-                                        e.target.value,
-                                      )
-                                    }
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Escape")
-                                        cancelInlineEdit();
-                                    }}
-                                    autoFocus
-                                    className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                  >
-                                    <option value="Available">Available</option>
-                                    <option value="Not Available">
-                                      Not Available
-                                    </option>
-                                  </select>
-                                ) : (
-                                  record.documentAvailability || "Not Available"
-                                )}
-                              </td>
-                            );
-                          })()}
-                          <td className="text-xs text-center">
-                            <div className="flex gap-1 items-center justify-center">
-                              {record.hodApprovalDoc && (
-                                <button
+                              return (
+                                <td
+                                  className={`text-xs ${isEditable ? "cursor-text hover:bg-blue-50" : ""}`}
+                                  contentEditable={isEditing}
+                                  suppressContentEditableWarning
                                   onClick={() =>
-                                    setViewingDocument({
-                                      url: record.hodApprovalDoc!,
-                                      title: `HO Approval - ${record.companyName}`,
-                                    })
+                                    isEditable &&
+                                    handleCellClick(record, "companyWebsite")
                                   }
-                                  className="text-blue-600 hover:underline cursor-pointer text-xs"
+                                  onBlur={(e) => {
+                                    if (isEditing) {
+                                      handleInlineFieldChange(
+                                        "companyWebsite",
+                                        e.currentTarget.textContent || "",
+                                      );
+                                    }
+                                  }}
+                                  style={cellStyle}
+                                  title={
+                                    isEditable && !isEditing
+                                      ? "Click to edit"
+                                      : ""
+                                  }
                                 >
-                                  View
-                                </button>
-                              )}
-                              {user?.role === "admin" && (
-                                <>
-                                  {record.hodApprovalDoc && (
-                                    <span className="text-gray-300">|</span>
-                                  )}
-                                  <label className="relative cursor-pointer px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-1 text-xs">
-                                    {uploadingDoc?.recordId === record.id &&
-                                    uploadingDoc?.field === "hodApprovalDoc" ? (
-                                      <span className="flex items-center gap-1">
-                                        <div className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
-                                        Uploading...
-                                      </span>
-                                    ) : (
-                                      <span className="flex items-center gap-1">
-                                        <FiUpload />
-                                        {record.hodApprovalDoc
-                                          ? "Replace"
-                                          : "Upload"}
-                                      </span>
-                                    )}
-                                    <input
-                                      type="file"
-                                      accept=".pdf,.doc,.docx,image/*"
-                                      onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file) {
-                                          handleFileUpload(
-                                            record.id,
-                                            "hodApprovalDoc",
-                                            file,
-                                          );
-                                        }
-                                        e.target.value = "";
+                                  {isEditing ? (
+                                    record.companyWebsite || ""
+                                  ) : record.companyWebsite ? (
+                                    <a
+                                      href={record.companyWebsite}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-600 hover:underline"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
                                       }}
-                                      disabled={
-                                        uploadingDoc?.recordId === record.id &&
-                                        uploadingDoc?.field === "hodApprovalDoc"
-                                      }
-                                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
-                                  </label>
-                                </>
-                              )}
-                              {!record.hodApprovalDoc &&
-                                user?.role !== "admin" &&
-                                "-"}
-                            </div>
-                          </td>
-                          <td className="text-xs text-center">
-                            <div className="flex gap-1 items-center justify-center">
-                              {record.signedAgreementDoc && (
-                                <button
+                                    >
+                                      {record.companyWebsite.length > 30
+                                        ? record.companyWebsite.substring(
+                                            0,
+                                            30,
+                                          ) + "..."
+                                        : record.companyWebsite}
+                                    </a>
+                                  ) : (
+                                    "-"
+                                  )}
+                                </td>
+                              );
+                            })()}
+                            {(() => {
+                              const isEditing =
+                                editingCell?.recordId === record.id &&
+                                editingCell?.field === "companyRelationship";
+                              const cellStyle = isEditing
+                                ? {
+                                    border: "3px solid #000000",
+                                    outline: "none",
+                                    padding: "4px",
+                                    backgroundColor: "#f5f5f5",
+                                  }
+                                : {};
+
+                              return (
+                                <td
+                                  className={`text-center ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
                                   onClick={() =>
-                                    setViewingDocument({
-                                      url: record.signedAgreementDoc!,
-                                      title: `Signed Agreement - ${record.companyName}`,
-                                    })
+                                    isEditable &&
+                                    handleCellClick(
+                                      record,
+                                      "companyRelationship",
+                                    )
                                   }
-                                  className="text-blue-600 hover:underline cursor-pointer text-xs"
+                                  style={cellStyle}
+                                  title={
+                                    isEditable && !isEditing
+                                      ? "Click to edit"
+                                      : ""
+                                  }
                                 >
-                                  View
-                                </button>
-                              )}
-                              {user?.role === "admin" && (
-                                <>
-                                  {record.signedAgreementDoc && (
-                                    <span className="text-gray-300">|</span>
-                                  )}
-                                  <label className="relative cursor-pointer px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-1 text-xs">
-                                    {uploadingDoc?.recordId === record.id &&
-                                    uploadingDoc?.field ===
-                                      "signedAgreementDoc" ? (
-                                      <span className="flex items-center gap-1">
-                                        <div className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
-                                        Uploading...
-                                      </span>
-                                    ) : (
-                                      <span className="flex items-center gap-1">
-                                        <FiUpload />
-                                        {record.signedAgreementDoc
-                                          ? "Replace"
-                                          : "Upload"}
-                                      </span>
-                                    )}
-                                    <input
-                                      type="file"
-                                      accept=".pdf,.doc,.docx,image/*"
-                                      onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file) {
-                                          handleFileUpload(
-                                            record.id,
-                                            "signedAgreementDoc",
-                                            file,
-                                          );
-                                        }
-                                        e.target.value = "";
-                                      }}
-                                      disabled={
-                                        uploadingDoc?.recordId === record.id &&
-                                        uploadingDoc?.field ===
-                                          "signedAgreementDoc"
+                                  {isEditing ? (
+                                    <select
+                                      value={
+                                        inlineEditData.companyRelationship ||
+                                        record.companyRelationship ||
+                                        3
                                       }
-                                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
-                                  </label>
-                                </>
-                              )}
-                              {!record.signedAgreementDoc &&
-                                user?.role !== "admin" &&
-                                "-"}
-                            </div>
-                          </td>
-                          <td className="text-xs">{record.createdByName}</td>
-                          <td>
-                            <div className="flex gap-1">
-                              {isEditable && (
-                                <>
-                                  <button
-                                    onClick={() => handleEdit(record)}
-                                    className="text-xs text-blue-600 hover:text-blue-800"
-                                  >
-                                    Form
-                                  </button>
-                                  <span className="text-[#d1d5db]">|</span>
-                                </>
-                              )}
-                              <button
-                                onClick={() => setViewingRecord(record)}
-                                className="text-xs text-blue-600 hover:text-blue-800"
-                              >
-                                View
-                              </button>
-                              {canDelete() && (
-                                <>
-                                  <span className="text-[#d1d5db]">|</span>
+                                      onChange={(e) =>
+                                        saveFieldDirectly(
+                                          "companyRelationship",
+                                          parseInt(e.target.value),
+                                        )
+                                      }
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Escape")
+                                          cancelInlineEdit();
+                                      }}
+                                      autoFocus
+                                      className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    >
+                                      <option value={1}>1 - Poor</option>
+                                      <option value={2}>2 - Fair</option>
+                                      <option value={3}>3 - Good</option>
+                                      <option value={4}>4 - Very Good</option>
+                                      <option value={5}>5 - Excellent</option>
+                                    </select>
+                                  ) : (
+                                    record.companyRelationship || 3
+                                  )}
+                                </td>
+                              );
+                            })()}
+                            {renderEditableCell(
+                              "industryContactName",
+                              record.industryContactName || "-",
+                              "text-xs",
+                            )}
+                            {renderEditableCell(
+                              "industryContactMobile",
+                              record.industryContactMobile || "-",
+                              "text-xs",
+                            )}
+                            {renderEditableCell(
+                              "industryContactEmail",
+                              record.industryContactEmail || "-",
+                              "text-xs",
+                            )}
+                            {renderEditableCell(
+                              "institutionContactName",
+                              record.institutionContactName || "-",
+                              "text-xs",
+                            )}
+                            {renderEditableCell(
+                              "institutionContactMobile",
+                              record.institutionContactMobile || "-",
+                              "text-xs",
+                            )}
+                            {renderEditableCell(
+                              "institutionContactEmail",
+                              record.institutionContactEmail || "-",
+                              "text-xs",
+                            )}
+                            {renderEditableCell(
+                              "clubsAligned",
+                              record.clubsAligned || "-",
+                              "text-xs",
+                            )}
+                            {renderEditableCell(
+                              "sdgGoals",
+                              record.sdgGoals || "-",
+                              "text-xs",
+                            )}
+                            {renderEditableCell(
+                              "skillsTechnologies",
+                              record.skillsTechnologies || "-",
+                              "text-xs",
+                              50,
+                            )}
+                            {renderEditableCell(
+                              "perStudentCost",
+                              record.perStudentCost || 0,
+                              "text-center",
+                            )}
+                            {renderEditableCell(
+                              "placementOpportunity",
+                              record.placementOpportunity || 0,
+                              "text-center",
+                            )}
+                            {renderEditableCell(
+                              "internshipOpportunity",
+                              record.internshipOpportunity || 0,
+                              "text-center",
+                            )}
+                            {(() => {
+                              const isEditing =
+                                editingCell?.recordId === record.id &&
+                                editingCell?.field === "goingForRenewal";
+                              const cellStyle = isEditing
+                                ? {
+                                    border: "3px solid #000000",
+                                    outline: "none",
+                                    padding: "4px",
+                                    backgroundColor: "#f5f5f5",
+                                  }
+                                : {};
+
+                              return (
+                                <td
+                                  className={`text-center ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
+                                  onClick={() =>
+                                    isEditable &&
+                                    handleCellClick(record, "goingForRenewal")
+                                  }
+                                  style={cellStyle}
+                                  title={
+                                    isEditable && !isEditing
+                                      ? "Click to edit"
+                                      : ""
+                                  }
+                                >
+                                  {isEditing ? (
+                                    <select
+                                      value={
+                                        inlineEditData.goingForRenewal ||
+                                        record.goingForRenewal ||
+                                        "No"
+                                      }
+                                      onChange={(e) =>
+                                        saveFieldDirectly(
+                                          "goingForRenewal",
+                                          e.target.value,
+                                        )
+                                      }
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Escape")
+                                          cancelInlineEdit();
+                                      }}
+                                      autoFocus
+                                      className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    >
+                                      <option value="Yes">Yes</option>
+                                      <option value="No">No</option>
+                                    </select>
+                                  ) : (
+                                    <span className="flex items-center justify-between gap-1">
+                                      <span>
+                                        {record.goingForRenewal || "No"}
+                                      </span>
+                                      <FiChevronDown
+                                        className="text-blue-600"
+                                        size={14}
+                                      />
+                                    </span>
+                                  )}
+                                </td>
+                              );
+                            })()}
+                            {renderEditableCell(
+                              "benefitsAchieved",
+                              record.benefitsAchieved || "-",
+                              "text-xs",
+                              50,
+                            )}
+                            {(() => {
+                              const isEditing =
+                                editingCell?.recordId === record.id &&
+                                editingCell?.field === "documentAvailability";
+                              const cellStyle = isEditing
+                                ? {
+                                    border: "3px solid #000000",
+                                    outline: "none",
+                                    padding: "4px",
+                                    backgroundColor: "#f5f5f5",
+                                  }
+                                : {};
+
+                              return (
+                                <td
+                                  className={`text-xs ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
+                                  onClick={() =>
+                                    isEditable &&
+                                    handleCellClick(
+                                      record,
+                                      "documentAvailability",
+                                    )
+                                  }
+                                  style={cellStyle}
+                                  title={
+                                    isEditable && !isEditing
+                                      ? "Click to edit"
+                                      : ""
+                                  }
+                                >
+                                  {isEditing ? (
+                                    <select
+                                      value={
+                                        inlineEditData.documentAvailability ||
+                                        record.documentAvailability ||
+                                        "Not Available"
+                                      }
+                                      onChange={(e) =>
+                                        saveFieldDirectly(
+                                          "documentAvailability",
+                                          e.target.value,
+                                        )
+                                      }
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Escape")
+                                          cancelInlineEdit();
+                                      }}
+                                      autoFocus
+                                      className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    >
+                                      <option value="Available">
+                                        Available
+                                      </option>
+                                      <option value="Not Available">
+                                        Not Available
+                                      </option>
+                                    </select>
+                                  ) : (
+                                    <span className="flex items-center justify-between gap-1">
+                                      <span>
+                                        {record.documentAvailability ||
+                                          "Not Available"}
+                                      </span>
+                                      <FiChevronDown
+                                        className="text-blue-600"
+                                        size={14}
+                                      />
+                                    </span>
+                                  )}
+                                </td>
+                              );
+                            })()}
+                            <td className="text-xs text-center">
+                              <div className="flex gap-1 items-center justify-center">
+                                {record.hodApprovalDoc && (
                                   <button
                                     onClick={() =>
-                                      handleDeleteRecord(record.id)
+                                      setViewingDocument({
+                                        url: record.hodApprovalDoc!,
+                                        title: `HO Approval - ${record.companyName}`,
+                                      })
                                     }
-                                    className="text-xs text-red-600 hover:text-red-800"
+                                    className="text-blue-600 hover:underline cursor-pointer text-xs"
                                   >
-                                    Del
+                                    View
                                   </button>
-                                </>
-                              )}
-                            </div>
+                                )}
+                                {user?.role === "admin" && (
+                                  <>
+                                    {record.hodApprovalDoc && (
+                                      <span className="text-gray-300">|</span>
+                                    )}
+                                    <label
+                                      className={`relative cursor-pointer px-2 py-1 text-white rounded transition-colors flex items-center gap-1 text-xs ${record.hodApprovalDoc ? "bg-blue-600 hover:bg-blue-700" : "bg-green-600 hover:bg-green-700"}`}
+                                    >
+                                      {uploadingDoc?.recordId === record.id &&
+                                      uploadingDoc?.field ===
+                                        "hodApprovalDoc" ? (
+                                        <span className="flex items-center gap-1">
+                                          <div className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
+                                          Uploading...
+                                        </span>
+                                      ) : (
+                                        <span className="flex items-center gap-1">
+                                          <FiUpload />
+                                          {record.hodApprovalDoc
+                                            ? "Replace"
+                                            : "Upload"}
+                                        </span>
+                                      )}
+                                      <input
+                                        type="file"
+                                        accept=".pdf,.doc,.docx,image/*"
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) {
+                                            handleFileUpload(
+                                              record.id,
+                                              "hodApprovalDoc",
+                                              file,
+                                            );
+                                          }
+                                          e.target.value = "";
+                                        }}
+                                        disabled={
+                                          uploadingDoc?.recordId ===
+                                            record.id &&
+                                          uploadingDoc?.field ===
+                                            "hodApprovalDoc"
+                                        }
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                    </label>
+                                  </>
+                                )}
+                                {!record.hodApprovalDoc &&
+                                  user?.role !== "admin" &&
+                                  "-"}
+                              </div>
+                            </td>
+                            <td className="text-xs text-center">
+                              <div className="flex gap-1 items-center justify-center">
+                                {record.signedAgreementDoc && (
+                                  <button
+                                    onClick={() =>
+                                      setViewingDocument({
+                                        url: record.signedAgreementDoc!,
+                                        title: `Signed Agreement - ${record.companyName}`,
+                                      })
+                                    }
+                                    className="text-blue-600 hover:underline cursor-pointer text-xs"
+                                  >
+                                    View
+                                  </button>
+                                )}
+                                {user?.role === "admin" && (
+                                  <>
+                                    {record.signedAgreementDoc && (
+                                      <span className="text-gray-300">|</span>
+                                    )}
+                                    <label
+                                      className={`relative cursor-pointer px-2 py-1 text-white rounded transition-colors flex items-center gap-1 text-xs ${record.signedAgreementDoc ? "bg-blue-600 hover:bg-blue-700" : "bg-green-600 hover:bg-green-700"}`}
+                                    >
+                                      {uploadingDoc?.recordId === record.id &&
+                                      uploadingDoc?.field ===
+                                        "signedAgreementDoc" ? (
+                                        <span className="flex items-center gap-1">
+                                          <div className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
+                                          Uploading...
+                                        </span>
+                                      ) : (
+                                        <span className="flex items-center gap-1">
+                                          <FiUpload />
+                                          {record.signedAgreementDoc
+                                            ? "Replace"
+                                            : "Upload"}
+                                        </span>
+                                      )}
+                                      <input
+                                        type="file"
+                                        accept=".pdf,.doc,.docx,image/*"
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) {
+                                            handleFileUpload(
+                                              record.id,
+                                              "signedAgreementDoc",
+                                              file,
+                                            );
+                                          }
+                                          e.target.value = "";
+                                        }}
+                                        disabled={
+                                          uploadingDoc?.recordId ===
+                                            record.id &&
+                                          uploadingDoc?.field ===
+                                            "signedAgreementDoc"
+                                        }
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                    </label>
+                                  </>
+                                )}
+                                {!record.signedAgreementDoc &&
+                                  user?.role !== "admin" &&
+                                  "-"}
+                              </div>
+                            </td>
+                            <td className="text-xs">{record.createdByName}</td>
+                            <td>
+                              <div className="flex gap-1">
+                                {isEditable && (
+                                  <>
+                                    <button
+                                      onClick={() => handleEdit(record)}
+                                      className="text-xs text-blue-600 hover:text-blue-800"
+                                    >
+                                      Form
+                                    </button>
+                                    <span className="text-[#d1d5db]">|</span>
+                                  </>
+                                )}
+                                <button
+                                  onClick={() => setViewingRecord(record)}
+                                  className="text-xs text-blue-600 hover:text-blue-800"
+                                >
+                                  View
+                                </button>
+                                {canDelete() && (
+                                  <>
+                                    <span className="text-[#d1d5db]">|</span>
+                                    <button
+                                      onClick={() =>
+                                        handleDeleteRecord(record.id)
+                                      }
+                                      className="text-xs text-red-600 hover:text-red-800"
+                                    >
+                                      Del
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {records.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan={33}
+                            className="text-center py-8 text-[#6b7280]"
+                          >
+                            No records found. Click &quot;+ New Mou&quot; to add
+                            your first eMoU.
                           </td>
                         </tr>
-                      );
-                    })}
-                    {records.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={33}
-                          className="text-center py-8 text-[#6b7280]"
-                        >
-                          No records found. Click &quot;+ New Mou&quot; to add
-                          your first eMoU.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                      )}
+                      {/* Empty rows to ensure scrollbar is always visible */}
+                      {records.length > 0 &&
+                        records.length < 20 &&
+                        [...Array(20 - records.length)].map((_, i) => (
+                          <tr
+                            key={`empty-${i}`}
+                            className="h-10 border-b border-gray-100"
+                          >
+                            {[...Array(33)].map((_, j) => (
+                              <td
+                                key={`empty-cell-${i}-${j}`}
+                                className="bg-gray-50/30"
+                              >
+                                &nbsp;
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </>
           )}

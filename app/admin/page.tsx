@@ -26,6 +26,8 @@ import {
   FiEye,
   FiArrowLeft,
   FiUserPlus,
+  FiCalendar,
+  FiChevronDown,
 } from "react-icons/fi";
 
 function AdminPage() {
@@ -225,6 +227,8 @@ function AdminPage() {
     switch (status) {
       case "Active":
         return "bg-green-100 text-green-800";
+      case "Expiring":
+        return "bg-yellow-100 text-yellow-800";
       case "Expired":
         return "bg-red-100 text-red-800";
       case "Renewal Pending":
@@ -233,6 +237,12 @@ function AdminPage() {
         return "bg-gray-100 text-gray-800";
     }
   };
+
+  // Helper function to parse date in DD.MM.YYYY format
+  function parseDate(dateStr: string): Date {
+    const [day, month, year] = dateStr.split(".").map(Number);
+    return new Date(year, month - 1, day);
+  }
 
   const handleCellClick = (record: EMoURecord, field: keyof EMoURecord) => {
     if (
@@ -707,11 +717,44 @@ function AdminPage() {
     }
   };
 
-  const getDisplayStatus = (status: EMoUStatus | string): EMoUStatus => {
-    if (typeof status === "string" && status === "file chosen") {
+  const getDisplayStatus = (record: EMoURecord): string => {
+    // Handle "file chosen" placeholder (cast to string to avoid type error)
+    const statusStr = record.status as string;
+    if (statusStr === "file chosen") {
       return "Draft";
     }
-    return status as EMoUStatus;
+
+    // If not Active, return as-is
+    if (record.status !== "Active") return record.status;
+
+    // Check if Active record is expiring
+    const toDate = record.toDate;
+    if (
+      !toDate ||
+      toDate.toLowerCase().includes("perpetual") ||
+      toDate.toLowerCase().includes("indefinite")
+    ) {
+      return "Active";
+    }
+
+    try {
+      const parsedDate = parseDate(toDate);
+      parsedDate.setHours(0, 0, 0, 0);
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const twoMonthsFromNow = new Date(today);
+      twoMonthsFromNow.setMonth(twoMonthsFromNow.getMonth() + 2);
+
+      // If expiry date is between today and 2 months from now, show "Expiring"
+      if (parsedDate > today && parsedDate <= twoMonthsFromNow) {
+        return "Expiring";
+      }
+      return "Active";
+    } catch {
+      return "Active";
+    }
   };
 
   // Render comprehensive table with all fields
@@ -719,6 +762,60 @@ function AdminPage() {
     records: EMoURecord[],
     showApprovalActions: boolean,
   ) => {
+    // Helper function to get field type icon
+    const getFieldTypeIcon = (field: keyof EMoURecord) => {
+      const dateFields = ["fromDate", "toDate"];
+      const selectFields = [
+        "scope",
+        "maintainedBy",
+        "department",
+        "goingForRenewal",
+        "documentAvailability",
+      ];
+      const numberFields = [
+        "placementOpportunity",
+        "internshipOpportunity",
+        "perStudentCost",
+      ];
+      // Large text fields that shouldn't show icons
+      const largeTextFields = [
+        "description",
+        "aboutCompany",
+        "companyAddress",
+        "benefitsAchieved",
+        "skillsTechnologies",
+        "companyWebsite",
+        "industryContactEmail",
+        "institutionContactEmail",
+      ];
+
+      if (largeTextFields.includes(field as string)) {
+        return null;
+      } else if (dateFields.includes(field as string)) {
+        return (
+          <FiCalendar className="inline-block ml-1 text-blue-500" size={12} />
+        );
+      } else if (selectFields.includes(field as string)) {
+        return (
+          <FiChevronDown
+            className="inline-block ml-1 text-blue-600"
+            size={14}
+          />
+        );
+      } else if (numberFields.includes(field as string)) {
+        return (
+          <span
+            className="inline-block ml-1 text-orange-600 font-bold"
+            style={{ fontSize: "10px" }}
+          >
+            123
+          </span>
+        );
+      } else {
+        return null;
+      }
+    };
+
     const renderEditableCell = (
       record: EMoURecord,
       field: keyof EMoURecord,
@@ -774,652 +871,714 @@ function AdminPage() {
                 : ""
           }
         >
-          {displayContent}
+          <span className="flex items-center justify-between gap-1">
+            <span>{displayContent}</span>
+            {!isEditing && getFieldTypeIcon(field)}
+          </span>
         </td>
       );
     };
 
     return (
       <div
-        className="overflow-auto bg-white rounded-lg shadow-sm relative"
+        className="bg-white rounded-lg shadow-sm border border-gray-200"
         style={{
-          cursor: isDragging ? "grabbing" : "grab",
-          maxHeight: "calc(100vh - 350px)",
+          height: "calc(100vh - 290px)",
+          minHeight: "400px",
+          display: "flex",
+          flexDirection: "column",
         }}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
       >
-        <style jsx>{`
-          .sheet-table td {
-            max-width: 300px;
-            overflow-x: auto;
-            white-space: nowrap;
-          }
-          .sheet-table td::-webkit-scrollbar {
-            height: 4px;
-          }
-          .sheet-table td::-webkit-scrollbar-thumb {
-            background: #cbd5e0;
-            border-radius: 2px;
-          }
-        `}</style>
-        <table className="sheet-table">
-          <thead className="sticky top-0 z-10 bg-white shadow-sm">
-            <tr>
-              <th style={{ width: "60px" }}>S.No</th>
-              <th style={{ width: "100px" }}>ID</th>
-              <th style={{ minWidth: "200px" }}>Company Name</th>
-              <th style={{ width: "100px" }}>Department</th>
-              <th style={{ width: "120px" }}>Scope</th>
-              <th style={{ width: "140px" }}>Maintained By</th>
-              <th style={{ width: "100px" }}>From Date</th>
-              <th style={{ width: "100px" }}>To Date</th>
-              <th style={{ width: "110px" }}>Status</th>
-              <th style={{ minWidth: "250px" }}>Description</th>
-              <th style={{ minWidth: "200px" }}>About Company</th>
-              <th style={{ minWidth: "200px" }}>Company Address</th>
-              <th style={{ width: "180px" }}>Company Website</th>
-              <th style={{ width: "90px" }}>Relationship</th>
-              <th style={{ width: "150px" }}>Industry Contact</th>
-              <th style={{ width: "120px" }}>Industry Mobile</th>
-              <th style={{ width: "180px" }}>Industry Email</th>
-              <th style={{ width: "150px" }}>Institution Contact</th>
-              <th style={{ width: "120px" }}>Institution Mobile</th>
-              <th style={{ width: "180px" }}>Institution Email</th>
-              <th style={{ width: "150px" }}>Clubs Aligned</th>
-              <th style={{ width: "150px" }}>SDG Goals</th>
-              <th style={{ minWidth: "200px" }}>Skills/Technologies</th>
-              <th style={{ width: "90px" }}>Per Student Cost</th>
-              <th style={{ width: "90px" }}>Placement</th>
-              <th style={{ width: "90px" }}>Internship</th>
-              <th style={{ width: "80px" }}>Renewal</th>
-              <th style={{ minWidth: "200px" }}>Benefits Achieved</th>
-              <th style={{ width: "150px" }}>Doc Availability</th>
-              <th style={{ width: "180px" }}>HO Approval</th>
-              <th style={{ width: "180px" }}>Signed Agreement</th>
-              <th style={{ width: "120px" }}>Created By</th>
-              <th style={{ width: showApprovalActions ? "200px" : "100px" }}>
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {records.map((record, index) => {
-              const renderSelectCell = (
-                field: keyof EMoURecord,
-                options: { value: string; label: string }[],
-                defaultValue: string,
-              ) => {
-                const isEditing =
-                  editingCell?.recordId === record.id &&
-                  editingCell?.field === field;
-                const cellStyle = isEditing
-                  ? {
-                      border: "3px solid #000000",
-                      outline: "none",
-                      padding: "4px",
-                      backgroundColor: "#f5f5f5",
-                    }
-                  : {};
+        <div
+          className="flex-1 overflow-auto"
+          style={{
+            cursor: isDragging ? "grabbing" : "grab",
+          }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
+        >
+          <style jsx>{`
+            .sheet-table {
+              min-width: 4000px;
+              border-collapse: collapse;
+            }
+            .sheet-table th,
+            .sheet-table td {
+              padding: 4px 8px;
+              font-size: 11px;
+            }
+            .sheet-table th {
+              font-size: 10px;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+            }
+            .sheet-table td {
+              max-width: 300px;
+              overflow-x: auto;
+              white-space: nowrap;
+            }
+            .sheet-table td::-webkit-scrollbar {
+              height: 3px;
+            }
+            .sheet-table td::-webkit-scrollbar-thumb {
+              background: #cbd5e0;
+              border-radius: 2px;
+            }
+            .sheet-table tbody tr {
+              height: 32px;
+            }
+          `}</style>
+          <table className="sheet-table">
+            <thead className="sticky top-0 z-10 bg-white shadow-sm">
+              <tr>
+                <th style={{ width: "60px" }}>S.No</th>
+                <th style={{ width: "100px" }}>ID</th>
+                <th style={{ minWidth: "200px" }}>Company Name</th>
+                <th style={{ width: "100px" }}>Department</th>
+                <th style={{ width: "120px" }}>Scope</th>
+                <th style={{ width: "140px" }}>Maintained By</th>
+                <th style={{ width: "100px" }}>From Date</th>
+                <th style={{ width: "100px" }}>To Date</th>
+                <th style={{ width: "110px" }}>Status</th>
+                <th style={{ minWidth: "250px" }}>Description</th>
+                <th style={{ minWidth: "200px" }}>About Company</th>
+                <th style={{ minWidth: "200px" }}>Company Address</th>
+                <th style={{ width: "180px" }}>Company Website</th>
+                <th style={{ width: "90px" }}>Relationship</th>
+                <th style={{ width: "150px" }}>Industry Contact</th>
+                <th style={{ width: "120px" }}>Industry Mobile</th>
+                <th style={{ width: "180px" }}>Industry Email</th>
+                <th style={{ width: "150px" }}>Institution Contact</th>
+                <th style={{ width: "120px" }}>Institution Mobile</th>
+                <th style={{ width: "180px" }}>Institution Email</th>
+                <th style={{ width: "150px" }}>Clubs Aligned</th>
+                <th style={{ width: "150px" }}>SDG Goals</th>
+                <th style={{ minWidth: "200px" }}>Skills/Technologies</th>
+                <th style={{ width: "90px" }}>Per Student Cost</th>
+                <th style={{ width: "90px" }}>Placement</th>
+                <th style={{ width: "90px" }}>Internship</th>
+                <th style={{ width: "80px" }}>Renewal</th>
+                <th style={{ minWidth: "200px" }}>Benefits Achieved</th>
+                <th style={{ width: "150px" }}>Doc Availability</th>
+                <th style={{ width: "180px" }}>HO Approval</th>
+                <th style={{ width: "180px" }}>Signed Agreement</th>
+                <th style={{ width: "120px" }}>Created By</th>
+                <th style={{ width: showApprovalActions ? "200px" : "100px" }}>
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {records.map((record, index) => {
+                const renderSelectCell = (
+                  field: keyof EMoURecord,
+                  options: { value: string; label: string }[],
+                  defaultValue: string,
+                ) => {
+                  const isEditing =
+                    editingCell?.recordId === record.id &&
+                    editingCell?.field === field;
+                  const cellStyle = isEditing
+                    ? {
+                        border: "3px solid #000000",
+                        outline: "none",
+                        padding: "4px",
+                        backgroundColor: "#f5f5f5",
+                      }
+                    : {};
 
-                return (
-                  <td
-                    className="text-center cursor-pointer hover:bg-blue-50"
-                    onClick={() => handleCellClick(record, field)}
-                    style={cellStyle}
-                    title="Click to edit"
-                  >
-                    {isEditing ? (
-                      <select
-                        value={String(
-                          (inlineEditData[field] as string) ||
-                            record[field] ||
-                            defaultValue,
-                        )}
-                        onChange={(e) =>
-                          saveFieldDirectly(field, e.target.value)
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Escape") cancelInlineEdit();
-                        }}
-                        autoFocus
-                        className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                      >
-                        {options.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (record[field] as string) === "file chosen" ||
-                      (record[field] as string) === "file chosen" ? (
-                      defaultValue
-                    ) : (
-                      (record[field] as string) || defaultValue
-                    )}
-                  </td>
-                );
-              };
+                  return (
+                    <td
+                      className="text-center cursor-pointer hover:bg-blue-50"
+                      onClick={() => handleCellClick(record, field)}
+                      style={cellStyle}
+                      title="Click to edit"
+                    >
+                      {isEditing ? (
+                        <select
+                          value={String(
+                            (inlineEditData[field] as string) ||
+                              record[field] ||
+                              defaultValue,
+                          )}
+                          onChange={(e) =>
+                            saveFieldDirectly(field, e.target.value)
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") cancelInlineEdit();
+                          }}
+                          autoFocus
+                          className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        >
+                          {options.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="flex items-center justify-between gap-1">
+                          <span>
+                            {(record[field] as string) === "file chosen" ||
+                            (record[field] as string) === "file chosen"
+                              ? defaultValue
+                              : (record[field] as string) || defaultValue}
+                          </span>
+                          <FiChevronDown className="text-blue-600" size={14} />
+                        </span>
+                      )}
+                    </td>
+                  );
+                };
 
-              const renderDateCell = (field: "fromDate" | "toDate") => {
-                const isEditing =
-                  editingCell?.recordId === record.id &&
-                  editingCell?.field === field;
-                const cellStyle = isEditing
-                  ? {
-                      border: "3px solid #000000",
-                      outline: "none",
-                      padding: "0",
-                      backgroundColor: "#f5f5f5",
-                    }
-                  : {};
+                const renderDateCell = (field: "fromDate" | "toDate") => {
+                  const isEditing =
+                    editingCell?.recordId === record.id &&
+                    editingCell?.field === field;
+                  const cellStyle = isEditing
+                    ? {
+                        border: "3px solid #000000",
+                        outline: "none",
+                        padding: "0",
+                        backgroundColor: "#f5f5f5",
+                      }
+                    : {};
 
-                const convertToInputFormat = (dateStr: string) => {
-                  if (!dateStr) return "";
-                  const [day, month, year] = dateStr.split(".");
-                  return `${year}-${month}-${day}`;
+                  const convertToInputFormat = (dateStr: string) => {
+                    if (!dateStr) return "";
+                    const [day, month, year] = dateStr.split(".");
+                    return `${year}-${month}-${day}`;
+                  };
+
+                  return (
+                    <td
+                      className="cursor-text hover:bg-blue-50"
+                      onClick={() => handleCellClick(record, field)}
+                      style={cellStyle}
+                      title="Click to edit"
+                    >
+                      {isEditing ? (
+                        <input
+                          type="date"
+                          defaultValue={convertToInputFormat(
+                            record[field] === "file chosen" ||
+                              record[field] === "file chosen"
+                              ? ""
+                              : record[field],
+                          )}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val) {
+                              const [year, month, day] = val.split("-");
+                              handleInlineFieldChange(
+                                field,
+                                `${day}.${month}.${year}`,
+                              );
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              saveInlineEdit();
+                            } else if (e.key === "Escape") {
+                              cancelInlineEdit();
+                            }
+                          }}
+                          autoFocus
+                          className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        />
+                      ) : (
+                        <span className="flex items-center justify-between gap-1">
+                          <span>
+                            {record[field] === "file chosen" ||
+                            record[field] === "file chosen"
+                              ? ""
+                              : record[field]}
+                          </span>
+                          <FiCalendar className="text-blue-500" size={12} />
+                        </span>
+                      )}
+                    </td>
+                  );
                 };
 
                 return (
-                  <td
-                    className="cursor-text hover:bg-blue-50"
-                    onClick={() => handleCellClick(record, field)}
-                    style={cellStyle}
-                    title="Click to edit"
-                  >
-                    {isEditing ? (
-                      <input
-                        type="date"
-                        defaultValue={convertToInputFormat(
-                          record[field] === "file chosen" ||
-                            record[field] === "file chosen"
-                            ? ""
-                            : record[field],
-                        )}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val) {
-                            const [year, month, day] = val.split("-");
-                            handleInlineFieldChange(
-                              field,
-                              `${day}.${month}.${year}`,
-                            );
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            saveInlineEdit();
-                          } else if (e.key === "Escape") {
-                            cancelInlineEdit();
-                          }
-                        }}
-                        autoFocus
-                        className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                      />
-                    ) : record[field] === "file chosen" ||
-                      record[field] === "file chosen" ? (
-                      ""
-                    ) : (
-                      record[field]
+                  <tr key={record.id} className="hover:bg-gray-50">
+                    <td className="text-center text-xs text-[#6b7280]">
+                      {index + 1}
+                    </td>
+                    <td className="font-medium text-[#2563eb] font-mono">
+                      {record.id}
+                    </td>
+                    {renderEditableCell(
+                      record,
+                      "companyName",
+                      record.companyName,
+                      "",
                     )}
-                  </td>
-                );
-              };
+                    {(() => {
+                      const maintainedByValue =
+                        record.maintainedBy || "Departments";
+                      const isDeptEditable =
+                        maintainedByValue === "Departments";
 
-              return (
-                <tr key={record.id} className="hover:bg-gray-50">
-                  <td className="text-center text-xs text-[#6b7280]">
-                    {index + 1}
-                  </td>
-                  <td className="font-medium text-[#2563eb] font-mono">
-                    {record.id}
-                  </td>
-                  {renderEditableCell(
-                    record,
-                    "companyName",
-                    record.companyName,
-                    "",
-                  )}
-                  {(() => {
-                    const maintainedByValue =
-                      record.maintainedBy || "Departments";
-                    const isDeptEditable = maintainedByValue === "Departments";
+                      if (isDeptEditable) {
+                        return renderSelectCell(
+                          "department",
+                          departments.map((d) => ({ value: d, label: d })),
+                          record.department,
+                        );
+                      }
 
-                    if (isDeptEditable) {
-                      return renderSelectCell(
-                        "department",
-                        departments.map((d) => ({ value: d, label: d })),
-                        record.department,
+                      return (
+                        <td
+                          className="text-center text-xs"
+                          title={`Set by Maintained By: ${maintainedByValue}`}
+                        >
+                          <span className="text-[#6b7280] italic">
+                            {maintainedByValue}
+                          </span>
+                        </td>
                       );
-                    }
-
-                    return (
-                      <td
-                        className="text-center text-xs"
-                        title={`Set by Maintained By: ${maintainedByValue}`}
-                      >
-                        <span className="text-[#6b7280] italic">
-                          {maintainedByValue}
-                        </span>
-                      </td>
-                    );
-                  })()}
-                  {renderSelectCell(
-                    "scope",
-                    [
-                      { value: "National", label: "National" },
-                      { value: "International", label: "International" },
-                    ],
-                    "National",
-                  )}
-                  {renderSelectCell(
-                    "maintainedBy",
-                    [
-                      { value: "Institution", label: "Institution" },
-                      { value: "Incubation", label: "Incubation" },
-                      { value: "Departments", label: "Departments" },
-                    ],
-                    "Departments",
-                  )}
-                  {renderDateCell("fromDate")}
-                  {renderDateCell("toDate")}
-                  {(() => {
-                    const isEditing =
-                      editingCell?.recordId === record.id &&
-                      editingCell?.field === "status";
-                    const cellStyle = isEditing
-                      ? {
-                          border: "3px solid #000000",
-                          outline: "none",
-                          padding: "4px",
-                          backgroundColor: "#f5f5f5",
-                        }
-                      : {};
-
-                    return (
-                      <td
-                        className="cursor-pointer hover:bg-blue-50"
-                        onClick={() => handleCellClick(record, "status")}
-                        style={cellStyle}
-                        title="Click to edit"
-                      >
-                        {isEditing ? (
-                          <select
-                            value={
-                              inlineEditData.status ||
-                              getDisplayStatus(record.status)
-                            }
-                            onChange={(e) =>
-                              saveFieldDirectly("status", e.target.value)
-                            }
-                            onKeyDown={(e) => {
-                              if (e.key === "Escape") cancelInlineEdit();
-                            }}
-                            autoFocus
-                            className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                          >
-                            <option value="Active">Active</option>
-                            <option value="Expired">Expired</option>
-                            <option value="Renewal Pending">
-                              Renewal Pending
-                            </option>
-                            <option value="Draft">Draft</option>
-                          </select>
-                        ) : (
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                              getDisplayStatus(record.status),
-                            )}`}
-                          >
-                            {getDisplayStatus(record.status)}
-                          </span>
-                        )}
-                      </td>
-                    );
-                  })()}
-                  {renderEditableCell(
-                    record,
-                    "description",
-                    record.description,
-                    "text-xs",
-                    80,
-                  )}
-                  {renderEditableCell(
-                    record,
-                    "aboutCompany",
-                    record.aboutCompany || "-",
-                    "text-xs",
-                    50,
-                  )}
-                  {renderEditableCell(
-                    record,
-                    "companyAddress",
-                    record.companyAddress || "-",
-                    "text-xs",
-                    50,
-                  )}
-                  {(() => {
-                    const isEditing =
-                      editingCell?.recordId === record.id &&
-                      editingCell?.field === "companyWebsite";
-                    const cellStyle = isEditing
-                      ? {
-                          border: "3px solid #000000",
-                          outline: "none",
-                          padding: "4px",
-                          backgroundColor: "#f5f5f5",
-                        }
-                      : {};
-
-                    return (
-                      <td
-                        className="text-xs cursor-text hover:bg-blue-50"
-                        contentEditable={isEditing}
-                        suppressContentEditableWarning
-                        onClick={() =>
-                          handleCellClick(record, "companyWebsite")
-                        }
-                        onBlur={(e) => {
-                          if (isEditing) {
-                            handleInlineFieldChange(
-                              "companyWebsite",
-                              e.currentTarget.textContent || "",
-                            );
+                    })()}
+                    {renderSelectCell(
+                      "scope",
+                      [
+                        { value: "National", label: "National" },
+                        { value: "International", label: "International" },
+                      ],
+                      "National",
+                    )}
+                    {renderSelectCell(
+                      "maintainedBy",
+                      [
+                        { value: "Institution", label: "Institution" },
+                        { value: "Incubation", label: "Incubation" },
+                        { value: "Departments", label: "Departments" },
+                      ],
+                      "Departments",
+                    )}
+                    {renderDateCell("fromDate")}
+                    {renderDateCell("toDate")}
+                    {(() => {
+                      const isEditing =
+                        editingCell?.recordId === record.id &&
+                        editingCell?.field === "status";
+                      const cellStyle = isEditing
+                        ? {
+                            border: "3px solid #000000",
+                            outline: "none",
+                            padding: "4px",
+                            backgroundColor: "#f5f5f5",
                           }
-                        }}
-                        style={cellStyle}
-                        title="Click to edit"
-                      >
-                        {isEditing ? (
-                          record.companyWebsite || ""
-                        ) : record.companyWebsite ? (
-                          <a
-                            href={record.companyWebsite}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {record.companyWebsite.length > 30
-                              ? record.companyWebsite.substring(0, 30) + "..."
-                              : record.companyWebsite}
-                          </a>
-                        ) : (
-                          "-"
-                        )}
-                      </td>
-                    );
-                  })()}
-                  {renderSelectCell(
-                    "companyRelationship",
-                    [
-                      { value: "1", label: "1 - Poor" },
-                      { value: "2", label: "2 - Fair" },
-                      { value: "3", label: "3 - Good" },
-                      { value: "4", label: "4 - Very Good" },
-                      { value: "5", label: "5 - Excellent" },
-                    ],
-                    "3",
-                  )}
-                  {renderEditableCell(
-                    record,
-                    "industryContactName",
-                    record.industryContactName || "-",
-                    "text-xs",
-                  )}
-                  {renderEditableCell(
-                    record,
-                    "industryContactMobile",
-                    record.industryContactMobile || "-",
-                    "text-xs",
-                  )}
-                  {renderEditableCell(
-                    record,
-                    "industryContactEmail",
-                    record.industryContactEmail || "-",
-                    "text-xs",
-                  )}
-                  {renderEditableCell(
-                    record,
-                    "institutionContactName",
-                    record.institutionContactName || "-",
-                    "text-xs",
-                  )}
-                  {renderEditableCell(
-                    record,
-                    "institutionContactMobile",
-                    record.institutionContactMobile || "-",
-                    "text-xs",
-                  )}
-                  {renderEditableCell(
-                    record,
-                    "institutionContactEmail",
-                    record.institutionContactEmail || "-",
-                    "text-xs",
-                  )}
-                  {renderEditableCell(
-                    record,
-                    "clubsAligned",
-                    record.clubsAligned || "-",
-                    "text-xs",
-                  )}
-                  {renderEditableCell(
-                    record,
-                    "sdgGoals",
-                    record.sdgGoals || "-",
-                    "text-xs",
-                  )}
-                  {renderEditableCell(
-                    record,
-                    "skillsTechnologies",
-                    record.skillsTechnologies || "-",
-                    "text-xs",
-                    50,
-                  )}
-                  {renderEditableCell(
-                    record,
-                    "perStudentCost",
-                    record.perStudentCost || 0,
-                    "text-center",
-                  )}
-                  {renderEditableCell(
-                    record,
-                    "placementOpportunity",
-                    record.placementOpportunity || 0,
-                    "text-center",
-                  )}
-                  {renderEditableCell(
-                    record,
-                    "internshipOpportunity",
-                    record.internshipOpportunity || 0,
-                    "text-center",
-                  )}
-                  {renderSelectCell(
-                    "goingForRenewal",
-                    [
-                      { value: "Yes", label: "Yes" },
-                      { value: "No", label: "No" },
-                    ],
-                    "No",
-                  )}
-                  {renderEditableCell(
-                    record,
-                    "benefitsAchieved",
-                    record.benefitsAchieved || "-",
-                    "text-xs",
-                    50,
-                  )}
-                  {renderSelectCell(
-                    "documentAvailability",
-                    [
-                      { value: "Available", label: "Available" },
-                      { value: "Not Available", label: "Not Available" },
-                    ],
-                    "Not Available",
-                  )}
-                  <td className="text-xs text-center">
-                    <div className="flex gap-1 items-center justify-center">
-                      {record.hodApprovalDoc && (
-                        <button
-                          onClick={() =>
-                            setViewingDocument({
-                              url: record.hodApprovalDoc!,
-                              title: `HO Approval - ${record.companyName}`,
-                            })
-                          }
-                          className="text-blue-600 hover:underline cursor-pointer text-xs flex items-center gap-1"
+                        : {};
+
+                      return (
+                        <td
+                          className="cursor-pointer hover:bg-blue-50"
+                          onClick={() => handleCellClick(record, "status")}
+                          style={cellStyle}
+                          title="Click to edit"
                         >
-                          <FiEye /> View
-                        </button>
-                      )}
-                      {record.hodApprovalDoc && (
-                        <span className="text-gray-300">|</span>
-                      )}
-                      <label className="relative cursor-pointer px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-1 text-xs">
-                        {uploadingDoc?.recordId === record.id &&
-                        uploadingDoc?.field === "hodApprovalDoc" ? (
-                          <span className="flex items-center gap-1">
-                            <div className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
-                            Uploading...
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1">
-                            <FiUpload />
-                            {record.hodApprovalDoc ? "Replace" : "Upload"}
-                          </span>
-                        )}
-                        <input
-                          type="file"
-                          accept=".pdf,.doc,.docx,image/*"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              handleFileUpload(
-                                record.id,
-                                "hodApprovalDoc",
-                                file,
+                          {isEditing ? (
+                            <select
+                              value={
+                                inlineEditData.status ||
+                                getDisplayStatus(record)
+                              }
+                              onChange={(e) =>
+                                saveFieldDirectly("status", e.target.value)
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Escape") cancelInlineEdit();
+                              }}
+                              autoFocus
+                              className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                            >
+                              <option value="Active">Active</option>
+                              <option value="Expired">Expired</option>
+                              <option value="Renewal Pending">
+                                Renewal Pending
+                              </option>
+                              <option value="Draft">Draft</option>
+                            </select>
+                          ) : (
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
+                                getDisplayStatus(record),
+                              )}`}
+                            >
+                              {getDisplayStatus(record)}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })()}
+                    {renderEditableCell(
+                      record,
+                      "description",
+                      record.description,
+                      "text-xs",
+                      80,
+                    )}
+                    {renderEditableCell(
+                      record,
+                      "aboutCompany",
+                      record.aboutCompany || "-",
+                      "text-xs",
+                      50,
+                    )}
+                    {renderEditableCell(
+                      record,
+                      "companyAddress",
+                      record.companyAddress || "-",
+                      "text-xs",
+                      50,
+                    )}
+                    {(() => {
+                      const isEditing =
+                        editingCell?.recordId === record.id &&
+                        editingCell?.field === "companyWebsite";
+                      const cellStyle = isEditing
+                        ? {
+                            border: "3px solid #000000",
+                            outline: "none",
+                            padding: "4px",
+                            backgroundColor: "#f5f5f5",
+                          }
+                        : {};
+
+                      return (
+                        <td
+                          className="text-xs cursor-text hover:bg-blue-50"
+                          contentEditable={isEditing}
+                          suppressContentEditableWarning
+                          onClick={() =>
+                            handleCellClick(record, "companyWebsite")
+                          }
+                          onBlur={(e) => {
+                            if (isEditing) {
+                              handleInlineFieldChange(
+                                "companyWebsite",
+                                e.currentTarget.textContent || "",
                               );
                             }
-                            e.target.value = "";
                           }}
-                          disabled={
-                            uploadingDoc?.recordId === record.id &&
-                            uploadingDoc?.field === "hodApprovalDoc"
-                          }
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </label>
-                      {!record.hodApprovalDoc}
-                    </div>
-                  </td>
-                  <td className="text-xs text-center">
-                    <div className="flex gap-1 items-center justify-center">
-                      {record.signedAgreementDoc && (
-                        <button
-                          onClick={() =>
-                            setViewingDocument({
-                              url: record.signedAgreementDoc!,
-                              title: `Signed Agreement - ${record.companyName}`,
-                            })
-                          }
-                          className="text-blue-600 hover:underline cursor-pointer text-xs flex items-center gap-1"
+                          style={cellStyle}
+                          title="Click to edit"
                         >
-                          <FiEye /> View
-                        </button>
-                      )}
-                      {record.signedAgreementDoc && (
-                        <span className="text-gray-300">|</span>
-                      )}
-                      <label className="relative cursor-pointer px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-1 text-xs">
-                        {uploadingDoc?.recordId === record.id &&
-                        uploadingDoc?.field === "signedAgreementDoc" ? (
-                          <span className="flex items-center gap-1">
-                            <div className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
-                            Uploading...
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1">
-                            <FiUpload />
-                            {record.signedAgreementDoc ? "Replace" : "Upload"}
-                          </span>
-                        )}
-                        <input
-                          type="file"
-                          accept=".pdf,.doc,.docx,image/*"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              handleFileUpload(
-                                record.id,
-                                "signedAgreementDoc",
-                                file,
-                              );
-                            }
-                            e.target.value = "";
-                          }}
-                          disabled={
-                            uploadingDoc?.recordId === record.id &&
-                            uploadingDoc?.field === "signedAgreementDoc"
-                          }
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </label>
-                      {!record.signedAgreementDoc && "-"}
-                    </div>
-                  </td>
-                  <td className="text-xs">{record.createdByName}</td>
-                  <td>
-                    <div className="flex gap-1 flex-wrap">
-                      {showApprovalActions && (
-                        <>
+                          {isEditing ? (
+                            record.companyWebsite || ""
+                          ) : record.companyWebsite ? (
+                            <a
+                              href={record.companyWebsite}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {record.companyWebsite.length > 30
+                                ? record.companyWebsite.substring(0, 30) + "..."
+                                : record.companyWebsite}
+                            </a>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                      );
+                    })()}
+                    {renderSelectCell(
+                      "companyRelationship",
+                      [
+                        { value: "1", label: "1 - Poor" },
+                        { value: "2", label: "2 - Fair" },
+                        { value: "3", label: "3 - Good" },
+                        { value: "4", label: "4 - Very Good" },
+                        { value: "5", label: "5 - Excellent" },
+                      ],
+                      "3",
+                    )}
+                    {renderEditableCell(
+                      record,
+                      "industryContactName",
+                      record.industryContactName || "-",
+                      "text-xs",
+                    )}
+                    {renderEditableCell(
+                      record,
+                      "industryContactMobile",
+                      record.industryContactMobile || "-",
+                      "text-xs",
+                    )}
+                    {renderEditableCell(
+                      record,
+                      "industryContactEmail",
+                      record.industryContactEmail || "-",
+                      "text-xs",
+                    )}
+                    {renderEditableCell(
+                      record,
+                      "institutionContactName",
+                      record.institutionContactName || "-",
+                      "text-xs",
+                    )}
+                    {renderEditableCell(
+                      record,
+                      "institutionContactMobile",
+                      record.institutionContactMobile || "-",
+                      "text-xs",
+                    )}
+                    {renderEditableCell(
+                      record,
+                      "institutionContactEmail",
+                      record.institutionContactEmail || "-",
+                      "text-xs",
+                    )}
+                    {renderEditableCell(
+                      record,
+                      "clubsAligned",
+                      record.clubsAligned || "-",
+                      "text-xs",
+                    )}
+                    {renderEditableCell(
+                      record,
+                      "sdgGoals",
+                      record.sdgGoals || "-",
+                      "text-xs",
+                    )}
+                    {renderEditableCell(
+                      record,
+                      "skillsTechnologies",
+                      record.skillsTechnologies || "-",
+                      "text-xs",
+                      50,
+                    )}
+                    {renderEditableCell(
+                      record,
+                      "perStudentCost",
+                      record.perStudentCost || 0,
+                      "text-center",
+                    )}
+                    {renderEditableCell(
+                      record,
+                      "placementOpportunity",
+                      record.placementOpportunity || 0,
+                      "text-center",
+                    )}
+                    {renderEditableCell(
+                      record,
+                      "internshipOpportunity",
+                      record.internshipOpportunity || 0,
+                      "text-center",
+                    )}
+                    {renderSelectCell(
+                      "goingForRenewal",
+                      [
+                        { value: "Yes", label: "Yes" },
+                        { value: "No", label: "No" },
+                      ],
+                      "No",
+                    )}
+                    {renderEditableCell(
+                      record,
+                      "benefitsAchieved",
+                      record.benefitsAchieved || "-",
+                      "text-xs",
+                      50,
+                    )}
+                    {renderSelectCell(
+                      "documentAvailability",
+                      [
+                        { value: "Available", label: "Available" },
+                        { value: "Not Available", label: "Not Available" },
+                      ],
+                      "Not Available",
+                    )}
+                    <td className="text-xs text-center">
+                      <div className="flex gap-1 items-center justify-center">
+                        {record.hodApprovalDoc && (
                           <button
-                            onClick={() => handleApproveRecord(record.id)}
-                            className="px-2 py-1 text-[10px] font-medium bg-green-600 hover:bg-green-700 text-white rounded transition-colors flex items-center gap-1"
+                            onClick={() =>
+                              setViewingDocument({
+                                url: record.hodApprovalDoc!,
+                                title: `HO Approval - ${record.companyName}`,
+                              })
+                            }
+                            className="text-blue-600 hover:underline cursor-pointer text-xs flex items-center gap-1"
                           >
-                            <FiCheck /> Approve
+                            <FiEye /> View
                           </button>
-                          {record.approvalStatus === "draft" && (
-                            <button
-                              onClick={() => handleMoveToPending(record.id)}
-                              className="px-2 py-1 text-[10px] font-medium bg-orange-600 hover:bg-orange-700 text-white rounded transition-colors flex items-center gap-1"
-                            >
-                              <FiClock /> To Pending
-                            </button>
+                        )}
+                        {record.hodApprovalDoc && (
+                          <span className="text-gray-300">|</span>
+                        )}
+                        <label
+                          className={`relative cursor-pointer px-2 py-1 text-white rounded transition-colors flex items-center gap-1 text-xs ${record.hodApprovalDoc ? "bg-blue-600 hover:bg-blue-700" : "bg-green-600 hover:bg-green-700"}`}
+                        >
+                          {uploadingDoc?.recordId === record.id &&
+                          uploadingDoc?.field === "hodApprovalDoc" ? (
+                            <span className="flex items-center gap-1">
+                              <div className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
+                              Uploading...
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1">
+                              <FiUpload />
+                              {record.hodApprovalDoc ? "Replace" : "Upload"}
+                            </span>
                           )}
-                          {record.approvalStatus === "pending" && (
-                            <button
-                              onClick={() => handleRejectRecord(record.id)}
-                              className="px-2 py-1 text-[10px] font-medium bg-red-600 hover:bg-red-700 text-white rounded transition-colors flex items-center gap-1"
-                            >
-                              <FiX /> Reject
-                            </button>
+                          <input
+                            type="file"
+                            accept=".pdf,.doc,.docx,image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                handleFileUpload(
+                                  record.id,
+                                  "hodApprovalDoc",
+                                  file,
+                                );
+                              }
+                              e.target.value = "";
+                            }}
+                            disabled={
+                              uploadingDoc?.recordId === record.id &&
+                              uploadingDoc?.field === "hodApprovalDoc"
+                            }
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </label>
+                        {!record.hodApprovalDoc}
+                      </div>
+                    </td>
+                    <td className="text-xs text-center">
+                      <div className="flex gap-1 items-center justify-center">
+                        {record.signedAgreementDoc && (
+                          <button
+                            onClick={() =>
+                              setViewingDocument({
+                                url: record.signedAgreementDoc!,
+                                title: `Signed Agreement - ${record.companyName}`,
+                              })
+                            }
+                            className="text-blue-600 hover:underline cursor-pointer text-xs flex items-center gap-1"
+                          >
+                            <FiEye /> View
+                          </button>
+                        )}
+                        {record.signedAgreementDoc && (
+                          <span className="text-gray-300">|</span>
+                        )}
+                        <label
+                          className={`relative cursor-pointer px-2 py-1 text-white rounded transition-colors flex items-center gap-1 text-xs ${record.signedAgreementDoc ? "bg-blue-600 hover:bg-blue-700" : "bg-green-600 hover:bg-green-700"}`}
+                        >
+                          {uploadingDoc?.recordId === record.id &&
+                          uploadingDoc?.field === "signedAgreementDoc" ? (
+                            <span className="flex items-center gap-1">
+                              <div className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
+                              Uploading...
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1">
+                              <FiUpload />
+                              {record.signedAgreementDoc ? "Replace" : "Upload"}
+                            </span>
                           )}
-                        </>
-                      )}
-                      <button
-                        onClick={() => setViewingRecord(record)}
-                        className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
-                      >
-                        <FiEye /> View
-                      </button>
-                    </div>
+                          <input
+                            type="file"
+                            accept=".pdf,.doc,.docx,image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                handleFileUpload(
+                                  record.id,
+                                  "signedAgreementDoc",
+                                  file,
+                                );
+                              }
+                              e.target.value = "";
+                            }}
+                            disabled={
+                              uploadingDoc?.recordId === record.id &&
+                              uploadingDoc?.field === "signedAgreementDoc"
+                            }
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </label>
+                        {!record.signedAgreementDoc}
+                      </div>
+                    </td>
+                    <td className="text-xs">{record.createdByName}</td>
+                    <td>
+                      <div className="flex gap-1 flex-wrap">
+                        {showApprovalActions && (
+                          <>
+                            <button
+                              onClick={() => handleApproveRecord(record.id)}
+                              className="px-2 py-1 text-[10px] font-medium bg-green-600 hover:bg-green-700 text-white rounded transition-colors flex items-center gap-1"
+                            >
+                              <FiCheck /> Approve
+                            </button>
+                            {record.approvalStatus === "draft" && (
+                              <button
+                                onClick={() => handleMoveToPending(record.id)}
+                                className="px-2 py-1 text-[10px] font-medium bg-orange-600 hover:bg-orange-700 text-white rounded transition-colors flex items-center gap-1"
+                              >
+                                <FiClock /> To Pending
+                              </button>
+                            )}
+                            {record.approvalStatus === "pending" && (
+                              <button
+                                onClick={() => handleRejectRecord(record.id)}
+                                className="px-2 py-1 text-[10px] font-medium bg-red-600 hover:bg-red-700 text-white rounded transition-colors flex items-center gap-1"
+                              >
+                                <FiX /> Reject
+                              </button>
+                            )}
+                          </>
+                        )}
+                        <button
+                          onClick={() => setViewingRecord(record)}
+                          className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                        >
+                          <FiEye /> View
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {records.length === 0 && (
+                <tr>
+                  <td colSpan={33} className="text-center py-8 text-[#6b7280]">
+                    No records found.
                   </td>
                 </tr>
-              );
-            })}
-            {records.length === 0 && (
-              <tr>
-                <td colSpan={33} className="text-center py-8 text-[#6b7280]">
-                  No records found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+              {/* Empty rows to ensure scrollbar is always visible */}
+              {records.length > 0 &&
+                records.length < 20 &&
+                [...Array(20 - records.length)].map((_, i) => (
+                  <tr
+                    key={`empty-${i}`}
+                    className="h-10 border-b border-gray-100"
+                  >
+                    {[...Array(33)].map((_, j) => (
+                      <td
+                        key={`empty-cell-${i}-${j}`}
+                        className="bg-gray-50/30"
+                      >
+                        &nbsp;
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     );
   };
@@ -1815,12 +1974,36 @@ function AdminPage() {
                   </div>
                 </div>
               )}
+
+              {/* Stats Cards */}
+              <div className="grid grid-cols-3 gap-4 mt-6 mb-4">
+                <div className="bg-white p-4 rounded-lg border border-[#d1d5db]">
+                  <div className="text-2xl font-semibold text-[#1f2937]">
+                    {users.length}
+                  </div>
+                  <div className="text-xs text-[#6b7280] mt-1">Total Users</div>
+                </div>
+                <div className="bg-white p-4 rounded-lg border border-[#d1d5db]">
+                  <div className="text-2xl font-semibold text-purple-600">
+                    {users.filter((u) => u.role === "admin").length}
+                  </div>
+                  <div className="text-xs text-[#6b7280] mt-1">Admins</div>
+                </div>
+                <div className="bg-white p-4 rounded-lg border border-[#d1d5db]">
+                  <div className="text-2xl font-semibold text-green-600">
+                    {users.filter((u) => u.role === "hod").length}
+                  </div>
+                  <div className="text-xs text-[#6b7280] mt-1">HOD Users</div>
+                </div>
+              </div>
+
               {/* Users Table */}
               <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="sheet-table">
                     <thead>
                       <tr>
+                        <th style={{ width: "60px" }}>S.No</th>
                         <th style={{ width: "250px" }}>Name</th>
                         <th style={{ width: "250px" }}>Email</th>
                         <th style={{ width: "120px" }}>Role</th>
@@ -1832,14 +2015,14 @@ function AdminPage() {
                     <tbody>
                       {loading ? (
                         <tr key="loading">
-                          <td colSpan={6} className="text-center py-8">
+                          <td colSpan={7} className="text-center py-8">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                           </td>
                         </tr>
                       ) : users.length === 0 ? (
                         <tr key="empty">
                           <td
-                            colSpan={6}
+                            colSpan={7}
                             className="text-center py-8 text-[#6b7280]"
                           >
                             No users found. Click &quot;+ New User&quot; to
@@ -1847,8 +2030,11 @@ function AdminPage() {
                           </td>
                         </tr>
                       ) : (
-                        users.map((user) => (
+                        users.map((user, index) => (
                           <tr key={user.uid}>
+                            <td className="text-center text-xs text-[#6b7280]">
+                              {index + 1}
+                            </td>
                             <td className="font-medium">{user.displayName}</td>
                             <td>{user.email}</td>
                             <td>
@@ -1879,65 +2065,22 @@ function AdminPage() {
                   </table>
                 </div>
               </div>
-
-              {/* Stats Cards */}
-              <div className="grid grid-cols-3 gap-4 mt-6">
-                <div className="bg-white p-4 rounded-lg border border-[#d1d5db]">
-                  <div className="text-2xl font-semibold text-[#1f2937]">
-                    {users.length}
-                  </div>
-                  <div className="text-xs text-[#6b7280] mt-1">Total Users</div>
-                </div>
-                <div className="bg-white p-4 rounded-lg border border-[#d1d5db]">
-                  <div className="text-2xl font-semibold text-purple-600">
-                    {users.filter((u) => u.role === "admin").length}
-                  </div>
-                  <div className="text-xs text-[#6b7280] mt-1">Admins</div>
-                </div>
-                <div className="bg-white p-4 rounded-lg border border-[#d1d5db]">
-                  <div className="text-2xl font-semibold text-green-600">
-                    {users.filter((u) => u.role === "hod").length}
-                  </div>
-                  <div className="text-xs text-[#6b7280] mt-1">HOD Users</div>
-                </div>
-              </div>
             </>
           )}
 
           {/* Pending Approvals Tab */}
           {activeTab === "pending" && (
-            <div>
-              <div className="bg-white rounded-lg border border-[#d1d5db] px-4 py-2 mb-4">
-                <h3 className="text-xs font-semibold text-[#1f2937] uppercase tracking-wide">
-                  Pending Approvals ({pendingRecords.length})
-                </h3>
-              </div>
-              {renderRecordTable(pendingRecords, true)}
-            </div>
+            <div>{renderRecordTable(pendingRecords, true)}</div>
           )}
 
           {/* Draft Records Tab */}
           {activeTab === "drafts" && (
-            <div>
-              <div className="bg-white rounded-lg border border-[#d1d5db] px-4 py-2 mb-4">
-                <h3 className="text-xs font-semibold text-[#1f2937] uppercase tracking-wide">
-                  Draft Records ({draftRecords.length})
-                </h3>
-              </div>
-              {renderRecordTable(draftRecords, true)}
-            </div>
+            <div>{renderRecordTable(draftRecords, true)}</div>
           )}
 
           {/* Approved Records Tab */}
           {activeTab === "approved" && (
-            <div>
-              <div className="bg-white rounded-lg border border-[#d1d5db] px-4 py-2 mb-4">
-                <h3 className="text-xs font-semibold text-[#1f2937] uppercase tracking-wide">
-                  Approved Records ({approvedRecords.length})
-                </h3>
-              </div>
-              {renderRecordTable(approvedRecords, false)}
-            </div>
+            <div>{renderRecordTable(approvedRecords, false)}</div>
           )}
         </div>
 

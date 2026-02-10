@@ -11,8 +11,6 @@ import {
   Line,
   AreaChart,
   Area,
-  BarChart,
-  Bar,
   PieChart,
   Pie,
   Cell,
@@ -23,12 +21,57 @@ import {
   Legend,
   ResponsiveContainer,
   ComposedChart,
+  Bar,
   RadarChart,
   PolarGrid,
   PolarAngleAxis,
   PolarRadiusAxis,
   Radar,
 } from "recharts";
+
+// All available departments
+const ALL_DEPARTMENTS = [
+  "CSE",
+  "ECE",
+  "MECH",
+  "CIVIL",
+  "EEE",
+  "IT",
+  "AIDS",
+  "CSBS",
+  "E&I",
+  "MECHATRONICS",
+  "CCE",
+  "AIML",
+  "CYBERSECURITY",
+  "IOT",
+  "EICE",
+  "CSE MTECH",
+  "Institution",
+  "Incubation",
+];
+
+// Colors for departments
+const DEPT_COLORS = [
+  "#3b82f6",
+  "#10b981",
+  "#f59e0b",
+  "#ef4444",
+  "#8b5cf6",
+  "#ec4899",
+  "#06b6d4",
+  "#84cc16",
+  "#f97316",
+  "#6366f1",
+  "#14b8a6",
+  "#a855f7",
+  "#22c55e",
+  "#eab308",
+  "#0ea5e9",
+  "#d946ef",
+  "#64748b",
+  "#78716c",
+];
 
 interface DepartmentStats {
   name: string;
@@ -39,6 +82,7 @@ interface DepartmentStats {
 export default function Dashboard() {
   const [records, setRecords] = useState<EMoURecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [radarFilter, setRadarFilter] = useState<"top5" | "all">("top5");
   const [popupData, setPopupData] = useState<{
     isOpen: boolean;
     title: string;
@@ -61,7 +105,8 @@ export default function Dashboard() {
   const loadRecords = async () => {
     try {
       const data = await getEMoUs();
-      setRecords(data);
+      // Only show analytics for approved records
+      setRecords(data.filter((r) => r.approvalStatus === "approved"));
     } catch (error) {
       console.error("Error loading records:", error);
     } finally {
@@ -86,9 +131,14 @@ export default function Dashboard() {
     ),
   };
 
-  // Department statistics
+  // Department statistics - include ALL departments
   const departmentStats: DepartmentStats[] = (() => {
     const deptMap = new Map<string, { count: number; active: number }>();
+    // Initialize all departments with 0
+    ALL_DEPARTMENTS.forEach((dept) => {
+      deptMap.set(dept, { count: 0, active: 0 });
+    });
+    // Count records
     records.forEach((record) => {
       const dept = record.department || "Uncategorized";
       const current = deptMap.get(dept) || { count: 0, active: 0 };
@@ -280,10 +330,12 @@ export default function Dashboard() {
     { name: "Draft", value: stats.draft, color: "#6b7280" },
   ].filter((d) => d.value > 0);
 
-  // Department performance radar data
-  const departmentRadarData = topDepartments.slice(0, 5).map((dept) => ({
+  // Department performance radar data - dynamic based on filter
+  const radarDepartments =
+    radarFilter === "top5" ? topDepartments.slice(0, 5) : departmentStats;
+  const departmentRadarData = radarDepartments.map((dept) => ({
     department:
-      dept.name.length > 10 ? dept.name.substring(0, 10) + "..." : dept.name,
+      dept.name.length > 8 ? dept.name.substring(0, 8) + "..." : dept.name,
     total: dept.count,
     active: dept.active,
     efficiency:
@@ -651,9 +703,21 @@ export default function Dashboard() {
 
               {/* Department Performance Radar */}
               <div className="col-span-4 bg-white rounded-lg p-3 border border-gray-200">
-                <h3 className="text-xs font-bold text-gray-700 mb-2 uppercase">
-                  Department Performance
-                </h3>
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="text-xs font-bold text-gray-700 uppercase">
+                    Department Performance
+                  </h3>
+                  <select
+                    value={radarFilter}
+                    onChange={(e) =>
+                      setRadarFilter(e.target.value as "top5" | "all")
+                    }
+                    className="text-[10px] px-2 py-1 border border-gray-200 rounded bg-white text-gray-700 cursor-pointer hover:border-gray-300"
+                  >
+                    <option value="top5">Top 5</option>
+                    <option value="all">All Depts</option>
+                  </select>
+                </div>
                 <ResponsiveContainer width="100%" height={200}>
                   <RadarChart data={departmentRadarData}>
                     <PolarGrid stroke="#e5e7eb" />
@@ -825,34 +889,71 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Row 4: Department Rankings + Top Performers */}
+            {/* Row 4: Department Pie Chart + Performance Insights */}
             <div className="grid grid-cols-12 gap-3">
+              {/* Department Distribution Pie */}
               <div className="col-span-6 bg-white rounded-lg p-3 border border-gray-200">
                 <h3 className="text-xs font-bold text-gray-700 mb-2 uppercase">
-                  Top 8 Departments
+                  Department Distribution
                 </h3>
-                <ResponsiveContainer width="100%" height={160}>
-                  <BarChart data={topDepartments.slice(0, 8)} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis
-                      type="number"
-                      tick={{ fontSize: 10 }}
-                      stroke="#6b7280"
-                    />
-                    <YAxis
-                      dataKey="name"
-                      type="category"
-                      tick={{ fontSize: 9 }}
-                      width={100}
-                      stroke="#6b7280"
-                    />
-                    <Tooltip
-                      contentStyle={{ fontSize: "12px", borderRadius: "8px" }}
-                    />
-                    <Bar dataKey="count" fill="#3b82f6" name="Total eMoUs" />
-                    <Bar dataKey="active" fill="#10b981" name="Active" />
-                  </BarChart>
-                </ResponsiveContainer>
+                <div className="flex">
+                  <ResponsiveContainer width="50%" height={160}>
+                    <PieChart>
+                      <Pie
+                        data={departmentStats
+                          .filter((d) => d.count > 0)
+                          .slice(0, 10)}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={30}
+                        outerRadius={60}
+                        paddingAngle={2}
+                        dataKey="count"
+                        nameKey="name"
+                      >
+                        {departmentStats
+                          .filter((d) => d.count > 0)
+                          .slice(0, 10)
+                          .map((entry, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={DEPT_COLORS[index % DEPT_COLORS.length]}
+                            />
+                          ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{ fontSize: "11px", borderRadius: "8px" }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="w-1/2 overflow-y-auto max-h-[160px] pl-2">
+                    {departmentStats.map((dept, idx) => (
+                      <div
+                        key={dept.name}
+                        className="flex items-center justify-between text-[10px] py-0.5 border-b border-gray-100 last:border-0"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <div
+                            className="w-2 h-2 rounded-full"
+                            style={{
+                              backgroundColor:
+                                DEPT_COLORS[idx % DEPT_COLORS.length],
+                            }}
+                          />
+                          <span
+                            className="text-gray-700 truncate max-w-[80px]"
+                            title={dept.name}
+                          >
+                            {dept.name}
+                          </span>
+                        </div>
+                        <span className="text-gray-500 font-medium">
+                          {dept.count}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div className="col-span-6 bg-white rounded-lg p-3 border border-gray-200">
@@ -906,16 +1007,16 @@ export default function Dashboard() {
                     </div>
                   </div>
                 </div>
-                <div className="mt-3 space-y-1">
-                  {topDepartments.slice(0, 3).map((dept, idx) => (
+                <div className="mt-2 grid grid-cols-3 gap-1">
+                  {topDepartments.slice(0, 6).map((dept, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center justify-between text-[10px] bg-gray-50 rounded px-2 py-1"
+                      className="flex items-center justify-between text-[9px] bg-gray-50 rounded px-1.5 py-0.5"
                     >
-                      <span className="font-medium text-gray-700">
+                      <span className="font-medium text-gray-700 truncate">
                         #{idx + 1} {dept.name}
                       </span>
-                      <span className="text-gray-600">
+                      <span className="text-gray-600 ml-1">
                         {dept.active}/{dept.count}
                       </span>
                     </div>
