@@ -1410,6 +1410,7 @@ function HomePage() {
                         <th style={{ width: "150px" }}>Doc Availability</th>
                         <th style={{ width: "180px" }}>HO Approval</th>
                         <th style={{ width: "180px" }}>Signed Agreement</th>
+                        <th style={{ width: "100px" }}>Actions</th>
                         <th style={{ minWidth: "250px" }}>Description</th>
                         <th style={{ minWidth: "200px" }}>About Company</th>
                         <th style={{ minWidth: "200px" }}>Company Address</th>
@@ -1433,7 +1434,7 @@ function HomePage() {
                         <th style={{ minWidth: "200px" }}>Benefits Achieved</th>
 
                         <th style={{ width: "120px" }}>Created By</th>
-                        <th style={{ width: "100px" }}>Actions</th>
+                        
                       </tr>
                     </thead>
                     <tbody>
@@ -2155,6 +2156,40 @@ function HomePage() {
                                   "-"}
                               </div>
                             </td>
+                            <td>
+                              <div className="flex gap-1">
+                                {isEditable && (
+                                  <>
+                                    <button
+                                      onClick={() => handleEdit(record)}
+                                      className="text-xs text-blue-600 hover:text-blue-800"
+                                    >
+                                      Form
+                                    </button>
+                                    <span className="text-[#d1d5db]">|</span>
+                                  </>
+                                )}
+                                <button
+                                  onClick={() => setViewingRecord(record)}
+                                  className="text-xs text-blue-600 hover:text-blue-800"
+                                >
+                                  View
+                                </button>
+                                {canDelete() && (
+                                  <>
+                                    <span className="text-[#d1d5db]">|</span>
+                                    <button
+                                      onClick={() =>
+                                        handleDeleteRecord(record.id)
+                                      }
+                                      className="text-xs text-red-600 hover:text-red-800"
+                                    >
+                                      Del
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
                             {renderEditableCell(
                               "description",
                               record.description,
@@ -2419,40 +2454,7 @@ function HomePage() {
                               50,
                             )}
                             <td className="text-xs">{record.createdByName}</td>
-                            <td>
-                              <div className="flex gap-1">
-                                {isEditable && (
-                                  <>
-                                    <button
-                                      onClick={() => handleEdit(record)}
-                                      className="text-xs text-blue-600 hover:text-blue-800"
-                                    >
-                                      Form
-                                    </button>
-                                    <span className="text-[#d1d5db]">|</span>
-                                  </>
-                                )}
-                                <button
-                                  onClick={() => setViewingRecord(record)}
-                                  className="text-xs text-blue-600 hover:text-blue-800"
-                                >
-                                  View
-                                </button>
-                                {canDelete() && (
-                                  <>
-                                    <span className="text-[#d1d5db]">|</span>
-                                    <button
-                                      onClick={() =>
-                                        handleDeleteRecord(record.id)
-                                      }
-                                      className="text-xs text-red-600 hover:text-red-800"
-                                    >
-                                      Del
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </td>
+                            
                           </tr>
                         );
                       })}
