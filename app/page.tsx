@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Alert from "@/components/Alert";
+import CustomDropdown, { CellDropdown } from "@/components/CustomDropdown";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ViewRecordDialog from "@/components/ViewRecordDialog";
 import DocumentViewer from "@/components/DocumentViewer";
@@ -179,13 +180,20 @@ function HomePage() {
     try {
       const filters: FilterOptions = {};
 
+      // Apply the filter for renewal pending status
+      if (selectedStatus === "Renewal Pending") {
+        filters.goingForRenewal = "Yes";
+      }
+
       if (selectedDepartment !== "all") {
         filters.department = selectedDepartment as FilterOptions["department"];
       }
 
-      // Special handling for "Expiring" and "With Docs" - these need client-side filtering
+      // Special handling for "Expiring", "Renewal Pending", and "With Docs" - these need client-side or special filtering
       if (selectedStatus === "Expiring") {
         filters.status = "Active";
+      } else if (selectedStatus === "Renewal Pending") {
+        // Already handled above with goingForRenewal filter - don't set status filter
       } else if (selectedStatus === "With Docs") {
         // Don't filter by status - we'll filter by document presence client-side
       } else if (selectedStatus !== "all") {
@@ -425,7 +433,7 @@ function HomePage() {
           approvalStatus,
         );
         withDocsCount = allApproved.data.filter(
-          (r) => r.hodApprovalDoc || r.signedAgreementDoc,
+          (r) => r.documentAvailability === "Available",
         ).length;
         renewalCount = allApproved.data.filter(
           (r) => r.goingForRenewal === "Yes",
@@ -1149,32 +1157,34 @@ function HomePage() {
               <label className="text-xs font-medium text-[#4b5563]">
                 Department:
               </label>
-              <select
+              <CustomDropdown
+                options={[
+                  { value: "all", label: "All Departments" },
+                  ...departments.map((dept) => ({ value: dept, label: dept })),
+                ]}
                 value={selectedDepartment}
-                onChange={(e) => setSelectedDepartment(e.target.value)}
-              >
-                <option value="all">All Departments</option>
-                {departments.map((dept) => (
-                  <option key={dept} value={dept}>
-                    {dept}
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => setSelectedDepartment(value)}
+                placeholder="All Departments"
+                className="min-w-[160px]"
+              />
             </div>
             <div className="flex items-center gap-2">
               <label className="text-xs font-medium text-[#4b5563]">
                 Status:
               </label>
-              <select
+              <CustomDropdown
+                options={[
+                  { value: "all", label: "All Status" },
+                  { value: "Active", label: "Active" },
+                  { value: "Expired", label: "Expired" },
+                  { value: "Renewal Pending", label: "Renewal Pending" },
+                  { value: "Draft", label: "Draft" },
+                ]}
                 value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-              >
-                <option value="all">All Status</option>
-                <option value="Active">Active</option>
-                <option value="Expired">Expired</option>
-                <option value="Renewal Pending">Renewal Pending</option>
-                <option value="Draft">Draft</option>
-              </select>
+                onChange={(value) => setSelectedStatus(value)}
+                placeholder="All Status"
+                className="min-w-[160px]"
+              />
             </div>
             <div className="flex-1">
               <input
@@ -1397,6 +1407,9 @@ function HomePage() {
                         <th style={{ width: "100px" }}>From Date</th>
                         <th style={{ width: "100px" }}>To Date</th>
                         <th style={{ width: "110px" }}>Status</th>
+                        <th style={{ width: "150px" }}>Doc Availability</th>
+                        <th style={{ width: "180px" }}>HO Approval</th>
+                        <th style={{ width: "180px" }}>Signed Agreement</th>
                         <th style={{ minWidth: "250px" }}>Description</th>
                         <th style={{ minWidth: "200px" }}>About Company</th>
                         <th style={{ minWidth: "200px" }}>Company Address</th>
@@ -1418,9 +1431,7 @@ function HomePage() {
                         <th style={{ width: "90px" }}>Internship</th>
                         <th style={{ width: "80px" }}>Renewal</th>
                         <th style={{ minWidth: "200px" }}>Benefits Achieved</th>
-                        <th style={{ width: "150px" }}>Doc Availability</th>
-                        <th style={{ width: "180px" }}>HO Approval</th>
-                        <th style={{ width: "180px" }}>Signed Agreement</th>
+
                         <th style={{ width: "120px" }}>Created By</th>
                         <th style={{ width: "100px" }}>Actions</th>
                       </tr>
@@ -1580,16 +1591,14 @@ function HomePage() {
                                 editingCell?.field === "department";
                               const cellStyle = isEditing
                                 ? {
-                                    border: "3px solid #000000",
-                                    outline: "none",
-                                    padding: "4px",
-                                    backgroundColor: "#f5f5f5",
+                                    padding: 0,
+                                    overflow: "visible" as const,
                                   }
                                 : {};
 
                               return (
                                 <td
-                                  className={`text-xs ${isEditable && isDeptEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
+                                  className={`text-xs relative ${isEditable && isDeptEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
                                   onClick={() =>
                                     isEditable &&
                                     isDeptEditable &&
@@ -1606,30 +1615,21 @@ function HomePage() {
                                 >
                                   {isDeptEditable ? (
                                     isEditing ? (
-                                      <select
+                                      <CellDropdown
+                                        options={departments.map((dept) => ({
+                                          value: dept,
+                                          label: dept,
+                                        }))}
                                         value={
                                           (inlineEditData.department as string) ||
                                           record.department
                                         }
-                                        onChange={(e) =>
-                                          saveFieldDirectly(
-                                            "department",
-                                            e.target.value,
-                                          )
+                                        onChange={(value) =>
+                                          saveFieldDirectly("department", value)
                                         }
-                                        onKeyDown={(e) => {
-                                          if (e.key === "Escape")
-                                            cancelInlineEdit();
-                                        }}
-                                        autoFocus
-                                        className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                      >
-                                        {departments.map((dept) => (
-                                          <option key={dept} value={dept}>
-                                            {dept}
-                                          </option>
-                                        ))}
-                                      </select>
+                                        onClose={cancelInlineEdit}
+                                        placeholder={record.department}
+                                      />
                                     ) : (
                                       <span className="flex items-center justify-between gap-1">
                                         <span>{record.department}</span>
@@ -1653,16 +1653,14 @@ function HomePage() {
                                 editingCell?.field === "scope";
                               const cellStyle = isEditing
                                 ? {
-                                    border: "3px solid #000000",
-                                    outline: "none",
-                                    padding: "4px",
-                                    backgroundColor: "#f5f5f5",
+                                    padding: 0,
+                                    overflow: "visible" as const,
                                   }
                                 : {};
 
                               return (
                                 <td
-                                  className={`text-center ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
+                                  className={`text-center relative ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
                                   onClick={() =>
                                     isEditable &&
                                     handleCellClick(record, "scope")
@@ -1675,30 +1673,28 @@ function HomePage() {
                                   }
                                 >
                                   {isEditing ? (
-                                    <select
+                                    <CellDropdown
+                                      options={[
+                                        {
+                                          value: "National",
+                                          label: "National",
+                                        },
+                                        {
+                                          value: "International",
+                                          label: "International",
+                                        },
+                                      ]}
                                       value={
                                         inlineEditData.scope ||
                                         record.scope ||
                                         "National"
                                       }
-                                      onChange={(e) =>
-                                        saveFieldDirectly(
-                                          "scope",
-                                          e.target.value,
-                                        )
+                                      onChange={(value) =>
+                                        saveFieldDirectly("scope", value)
                                       }
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Escape")
-                                          cancelInlineEdit();
-                                      }}
-                                      autoFocus
-                                      className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                    >
-                                      <option value="National">National</option>
-                                      <option value="International">
-                                        International
-                                      </option>
-                                    </select>
+                                      onClose={cancelInlineEdit}
+                                      placeholder="National"
+                                    />
                                   ) : (
                                     <span className="flex items-center justify-between gap-1">
                                       <span>{record.scope || "National"}</span>
@@ -1717,16 +1713,14 @@ function HomePage() {
                                 editingCell?.field === "maintainedBy";
                               const cellStyle = isEditing
                                 ? {
-                                    border: "3px solid #000000",
-                                    outline: "none",
-                                    padding: "4px",
-                                    backgroundColor: "#f5f5f5",
+                                    padding: 0,
+                                    overflow: "visible" as const,
                                   }
                                 : {};
 
                               return (
                                 <td
-                                  className={`text-center ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
+                                  className={`text-center relative ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
                                   onClick={() =>
                                     isEditable &&
                                     handleCellClick(record, "maintainedBy")
@@ -1739,35 +1733,32 @@ function HomePage() {
                                   }
                                 >
                                   {isEditing ? (
-                                    <select
+                                    <CellDropdown
+                                      options={[
+                                        {
+                                          value: "Institution",
+                                          label: "Institution",
+                                        },
+                                        {
+                                          value: "Incubation",
+                                          label: "Incubation",
+                                        },
+                                        {
+                                          value: "Departments",
+                                          label: "Departments",
+                                        },
+                                      ]}
                                       value={
                                         inlineEditData.maintainedBy ||
                                         record.maintainedBy ||
                                         "Departments"
                                       }
-                                      onChange={(e) =>
-                                        saveFieldDirectly(
-                                          "maintainedBy",
-                                          e.target.value,
-                                        )
+                                      onChange={(value) =>
+                                        saveFieldDirectly("maintainedBy", value)
                                       }
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Escape")
-                                          cancelInlineEdit();
-                                      }}
-                                      autoFocus
-                                      className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                    >
-                                      <option value="Institution">
-                                        Institution
-                                      </option>
-                                      <option value="Incubation">
-                                        Incubation
-                                      </option>
-                                      <option value="Departments">
-                                        Departments
-                                      </option>
-                                    </select>
+                                      onClose={cancelInlineEdit}
+                                      placeholder="Departments"
+                                    />
                                   ) : (
                                     <span className="flex items-center justify-between gap-1">
                                       <span>
@@ -1957,295 +1948,20 @@ function HomePage() {
                                 </td>
                               );
                             })()}
-                            {renderEditableCell(
-                              "description",
-                              record.description,
-                              "text-xs",
-                              80,
-                            )}
-                            {renderEditableCell(
-                              "aboutCompany",
-                              record.aboutCompany || "-",
-                              "text-xs",
-                              50,
-                            )}
-                            {renderEditableCell(
-                              "companyAddress",
-                              record.companyAddress || "-",
-                              "text-xs",
-                              50,
-                            )}
-                            {(() => {
-                              const isEditing =
-                                editingCell?.recordId === record.id &&
-                                editingCell?.field === "companyWebsite";
-                              const cellStyle = isEditing
-                                ? {
-                                    border: "3px solid #000000",
-                                    outline: "none",
-                                    padding: "4px",
-                                    backgroundColor: "#f5f5f5",
-                                  }
-                                : {};
-
-                              return (
-                                <td
-                                  className={`text-xs ${isEditable ? "cursor-text hover:bg-blue-50" : ""}`}
-                                  contentEditable={isEditing}
-                                  suppressContentEditableWarning
-                                  onClick={() =>
-                                    isEditable &&
-                                    handleCellClick(record, "companyWebsite")
-                                  }
-                                  onBlur={(e) => {
-                                    if (isEditing) {
-                                      handleInlineFieldChange(
-                                        "companyWebsite",
-                                        e.currentTarget.textContent || "",
-                                      );
-                                    }
-                                  }}
-                                  style={cellStyle}
-                                  title={
-                                    isEditable && !isEditing
-                                      ? "Click to edit"
-                                      : ""
-                                  }
-                                >
-                                  {isEditing ? (
-                                    record.companyWebsite || ""
-                                  ) : record.companyWebsite ? (
-                                    <a
-                                      href={record.companyWebsite}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-blue-600 hover:underline"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                      }}
-                                    >
-                                      {record.companyWebsite.length > 30
-                                        ? record.companyWebsite.substring(
-                                            0,
-                                            30,
-                                          ) + "..."
-                                        : record.companyWebsite}
-                                    </a>
-                                  ) : (
-                                    "-"
-                                  )}
-                                </td>
-                              );
-                            })()}
-                            {(() => {
-                              const isEditing =
-                                editingCell?.recordId === record.id &&
-                                editingCell?.field === "companyRelationship";
-                              const cellStyle = isEditing
-                                ? {
-                                    border: "3px solid #000000",
-                                    outline: "none",
-                                    padding: "4px",
-                                    backgroundColor: "#f5f5f5",
-                                  }
-                                : {};
-
-                              return (
-                                <td
-                                  className={`text-center ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
-                                  onClick={() =>
-                                    isEditable &&
-                                    handleCellClick(
-                                      record,
-                                      "companyRelationship",
-                                    )
-                                  }
-                                  style={cellStyle}
-                                  title={
-                                    isEditable && !isEditing
-                                      ? "Click to edit"
-                                      : ""
-                                  }
-                                >
-                                  {isEditing ? (
-                                    <select
-                                      value={
-                                        inlineEditData.companyRelationship ||
-                                        record.companyRelationship ||
-                                        3
-                                      }
-                                      onChange={(e) =>
-                                        saveFieldDirectly(
-                                          "companyRelationship",
-                                          parseInt(e.target.value),
-                                        )
-                                      }
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Escape")
-                                          cancelInlineEdit();
-                                      }}
-                                      autoFocus
-                                      className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                    >
-                                      <option value={1}>1 - Poor</option>
-                                      <option value={2}>2 - Fair</option>
-                                      <option value={3}>3 - Good</option>
-                                      <option value={4}>4 - Very Good</option>
-                                      <option value={5}>5 - Excellent</option>
-                                    </select>
-                                  ) : (
-                                    record.companyRelationship || 3
-                                  )}
-                                </td>
-                              );
-                            })()}
-                            {renderEditableCell(
-                              "industryContactName",
-                              record.industryContactName || "-",
-                              "text-xs",
-                            )}
-                            {renderEditableCell(
-                              "industryContactMobile",
-                              record.industryContactMobile || "-",
-                              "text-xs",
-                            )}
-                            {renderEditableCell(
-                              "industryContactEmail",
-                              record.industryContactEmail || "-",
-                              "text-xs",
-                            )}
-                            {renderEditableCell(
-                              "institutionContactName",
-                              record.institutionContactName || "-",
-                              "text-xs",
-                            )}
-                            {renderEditableCell(
-                              "institutionContactMobile",
-                              record.institutionContactMobile || "-",
-                              "text-xs",
-                            )}
-                            {renderEditableCell(
-                              "institutionContactEmail",
-                              record.institutionContactEmail || "-",
-                              "text-xs",
-                            )}
-                            {renderEditableCell(
-                              "clubsAligned",
-                              record.clubsAligned || "-",
-                              "text-xs",
-                            )}
-                            {renderEditableCell(
-                              "sdgGoals",
-                              record.sdgGoals || "-",
-                              "text-xs",
-                            )}
-                            {renderEditableCell(
-                              "skillsTechnologies",
-                              record.skillsTechnologies || "-",
-                              "text-xs",
-                              50,
-                            )}
-                            {renderEditableCell(
-                              "perStudentCost",
-                              record.perStudentCost || 0,
-                              "text-center",
-                            )}
-                            {renderEditableCell(
-                              "placementOpportunity",
-                              record.placementOpportunity || 0,
-                              "text-center",
-                            )}
-                            {renderEditableCell(
-                              "internshipOpportunity",
-                              record.internshipOpportunity || 0,
-                              "text-center",
-                            )}
-                            {(() => {
-                              const isEditing =
-                                editingCell?.recordId === record.id &&
-                                editingCell?.field === "goingForRenewal";
-                              const cellStyle = isEditing
-                                ? {
-                                    border: "3px solid #000000",
-                                    outline: "none",
-                                    padding: "4px",
-                                    backgroundColor: "#f5f5f5",
-                                  }
-                                : {};
-
-                              return (
-                                <td
-                                  className={`text-center ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
-                                  onClick={() =>
-                                    isEditable &&
-                                    handleCellClick(record, "goingForRenewal")
-                                  }
-                                  style={cellStyle}
-                                  title={
-                                    isEditable && !isEditing
-                                      ? "Click to edit"
-                                      : ""
-                                  }
-                                >
-                                  {isEditing ? (
-                                    <select
-                                      value={
-                                        inlineEditData.goingForRenewal ||
-                                        record.goingForRenewal ||
-                                        "No"
-                                      }
-                                      onChange={(e) =>
-                                        saveFieldDirectly(
-                                          "goingForRenewal",
-                                          e.target.value,
-                                        )
-                                      }
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Escape")
-                                          cancelInlineEdit();
-                                      }}
-                                      autoFocus
-                                      className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                    >
-                                      <option value="Yes">Yes</option>
-                                      <option value="No">No</option>
-                                    </select>
-                                  ) : (
-                                    <span className="flex items-center justify-between gap-1">
-                                      <span>
-                                        {record.goingForRenewal || "No"}
-                                      </span>
-                                      <FiChevronDown
-                                        className="text-blue-600"
-                                        size={14}
-                                      />
-                                    </span>
-                                  )}
-                                </td>
-                              );
-                            })()}
-                            {renderEditableCell(
-                              "benefitsAchieved",
-                              record.benefitsAchieved || "-",
-                              "text-xs",
-                              50,
-                            )}
                             {(() => {
                               const isEditing =
                                 editingCell?.recordId === record.id &&
                                 editingCell?.field === "documentAvailability";
                               const cellStyle = isEditing
                                 ? {
-                                    border: "3px solid #000000",
-                                    outline: "none",
-                                    padding: "4px",
-                                    backgroundColor: "#f5f5f5",
+                                    padding: 0,
+                                    overflow: "visible" as const,
                                   }
                                 : {};
 
                               return (
                                 <td
-                                  className={`text-xs ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
+                                  className={`text-xs relative ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
                                   onClick={() =>
                                     isEditable &&
                                     handleCellClick(
@@ -2261,32 +1977,31 @@ function HomePage() {
                                   }
                                 >
                                   {isEditing ? (
-                                    <select
+                                    <CellDropdown
+                                      options={[
+                                        {
+                                          value: "Available",
+                                          label: "Available",
+                                        },
+                                        {
+                                          value: "Not Available",
+                                          label: "Not Available",
+                                        },
+                                      ]}
                                       value={
                                         inlineEditData.documentAvailability ||
                                         record.documentAvailability ||
                                         "Not Available"
                                       }
-                                      onChange={(e) =>
+                                      onChange={(value) =>
                                         saveFieldDirectly(
                                           "documentAvailability",
-                                          e.target.value,
+                                          value,
                                         )
                                       }
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Escape")
-                                          cancelInlineEdit();
-                                      }}
-                                      autoFocus
-                                      className="w-full h-full px-1 py-1 text-xs border-0 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                    >
-                                      <option value="Available">
-                                        Available
-                                      </option>
-                                      <option value="Not Available">
-                                        Not Available
-                                      </option>
-                                    </select>
+                                      onClose={cancelInlineEdit}
+                                      placeholder="Not Available"
+                                    />
                                   ) : (
                                     <span className="flex items-center justify-between gap-1">
                                       <span>
@@ -2440,6 +2155,269 @@ function HomePage() {
                                   "-"}
                               </div>
                             </td>
+                            {renderEditableCell(
+                              "description",
+                              record.description,
+                              "text-xs",
+                              80,
+                            )}
+                            {renderEditableCell(
+                              "aboutCompany",
+                              record.aboutCompany || "-",
+                              "text-xs",
+                              50,
+                            )}
+                            {renderEditableCell(
+                              "companyAddress",
+                              record.companyAddress || "-",
+                              "text-xs",
+                              50,
+                            )}
+                            {(() => {
+                              const isEditing =
+                                editingCell?.recordId === record.id &&
+                                editingCell?.field === "companyWebsite";
+                              const cellStyle = isEditing
+                                ? {
+                                    border: "3px solid #000000",
+                                    outline: "none",
+                                    padding: "4px",
+                                    backgroundColor: "#f5f5f5",
+                                  }
+                                : {};
+
+                              return (
+                                <td
+                                  className={`text-xs ${isEditable ? "cursor-text hover:bg-blue-50" : ""}`}
+                                  contentEditable={isEditing}
+                                  suppressContentEditableWarning
+                                  onClick={() =>
+                                    isEditable &&
+                                    handleCellClick(record, "companyWebsite")
+                                  }
+                                  onBlur={(e) => {
+                                    if (isEditing) {
+                                      handleInlineFieldChange(
+                                        "companyWebsite",
+                                        e.currentTarget.textContent || "",
+                                      );
+                                    }
+                                  }}
+                                  style={cellStyle}
+                                  title={
+                                    isEditable && !isEditing
+                                      ? "Click to edit"
+                                      : ""
+                                  }
+                                >
+                                  {isEditing ? (
+                                    record.companyWebsite || ""
+                                  ) : record.companyWebsite ? (
+                                    <a
+                                      href={record.companyWebsite}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-600 hover:underline"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                      }}
+                                    >
+                                      {record.companyWebsite.length > 30
+                                        ? record.companyWebsite.substring(
+                                            0,
+                                            30,
+                                          ) + "..."
+                                        : record.companyWebsite}
+                                    </a>
+                                  ) : (
+                                    "-"
+                                  )}
+                                </td>
+                              );
+                            })()}
+                            {(() => {
+                              const isEditing =
+                                editingCell?.recordId === record.id &&
+                                editingCell?.field === "companyRelationship";
+                              const cellStyle = isEditing
+                                ? {
+                                    padding: 0,
+                                    overflow: "visible" as const,
+                                  }
+                                : {};
+
+                              return (
+                                <td
+                                  className={`text-center relative ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
+                                  onClick={() =>
+                                    isEditable &&
+                                    handleCellClick(
+                                      record,
+                                      "companyRelationship",
+                                    )
+                                  }
+                                  style={cellStyle}
+                                  title={
+                                    isEditable && !isEditing
+                                      ? "Click to edit"
+                                      : ""
+                                  }
+                                >
+                                  {isEditing ? (
+                                    <CellDropdown
+                                      options={[
+                                        { value: "1", label: "1 - Poor" },
+                                        { value: "2", label: "2 - Fair" },
+                                        { value: "3", label: "3 - Good" },
+                                        { value: "4", label: "4 - Very Good" },
+                                        { value: "5", label: "5 - Excellent" },
+                                      ]}
+                                      value={String(
+                                        inlineEditData.companyRelationship ||
+                                          record.companyRelationship ||
+                                          3,
+                                      )}
+                                      onChange={(value) =>
+                                        saveFieldDirectly(
+                                          "companyRelationship",
+                                          parseInt(value),
+                                        )
+                                      }
+                                      onClose={cancelInlineEdit}
+                                      placeholder="3 - Good"
+                                    />
+                                  ) : (
+                                    record.companyRelationship || 3
+                                  )}
+                                </td>
+                              );
+                            })()}
+                            {renderEditableCell(
+                              "industryContactName",
+                              record.industryContactName || "-",
+                              "text-xs",
+                            )}
+                            {renderEditableCell(
+                              "industryContactMobile",
+                              record.industryContactMobile || "-",
+                              "text-xs",
+                            )}
+                            {renderEditableCell(
+                              "industryContactEmail",
+                              record.industryContactEmail || "-",
+                              "text-xs",
+                            )}
+                            {renderEditableCell(
+                              "institutionContactName",
+                              record.institutionContactName || "-",
+                              "text-xs",
+                            )}
+                            {renderEditableCell(
+                              "institutionContactMobile",
+                              record.institutionContactMobile || "-",
+                              "text-xs",
+                            )}
+                            {renderEditableCell(
+                              "institutionContactEmail",
+                              record.institutionContactEmail || "-",
+                              "text-xs",
+                            )}
+                            {renderEditableCell(
+                              "clubsAligned",
+                              record.clubsAligned || "-",
+                              "text-xs",
+                            )}
+                            {renderEditableCell(
+                              "sdgGoals",
+                              record.sdgGoals || "-",
+                              "text-xs",
+                            )}
+                            {renderEditableCell(
+                              "skillsTechnologies",
+                              record.skillsTechnologies || "-",
+                              "text-xs",
+                              50,
+                            )}
+                            {renderEditableCell(
+                              "perStudentCost",
+                              record.perStudentCost || 0,
+                              "text-center",
+                            )}
+                            {renderEditableCell(
+                              "placementOpportunity",
+                              record.placementOpportunity || 0,
+                              "text-center",
+                            )}
+                            {renderEditableCell(
+                              "internshipOpportunity",
+                              record.internshipOpportunity || 0,
+                              "text-center",
+                            )}
+                            {(() => {
+                              const isEditing =
+                                editingCell?.recordId === record.id &&
+                                editingCell?.field === "goingForRenewal";
+                              const cellStyle = isEditing
+                                ? {
+                                    padding: 0,
+                                    overflow: "visible" as const,
+                                  }
+                                : {};
+
+                              return (
+                                <td
+                                  className={`text-center relative ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
+                                  onClick={() =>
+                                    isEditable &&
+                                    handleCellClick(record, "goingForRenewal")
+                                  }
+                                  style={cellStyle}
+                                  title={
+                                    isEditable && !isEditing
+                                      ? "Click to edit"
+                                      : ""
+                                  }
+                                >
+                                  {isEditing ? (
+                                    <CellDropdown
+                                      options={[
+                                        { value: "Yes", label: "Yes" },
+                                        { value: "No", label: "No" },
+                                      ]}
+                                      value={
+                                        inlineEditData.goingForRenewal ||
+                                        record.goingForRenewal ||
+                                        "No"
+                                      }
+                                      onChange={(value) =>
+                                        saveFieldDirectly(
+                                          "goingForRenewal",
+                                          value,
+                                        )
+                                      }
+                                      onClose={cancelInlineEdit}
+                                      placeholder="No"
+                                    />
+                                  ) : (
+                                    <span className="flex items-center justify-between gap-1">
+                                      <span>
+                                        {record.goingForRenewal || "No"}
+                                      </span>
+                                      <FiChevronDown
+                                        className="text-blue-600"
+                                        size={14}
+                                      />
+                                    </span>
+                                  )}
+                                </td>
+                              );
+                            })()}
+                            {renderEditableCell(
+                              "benefitsAchieved",
+                              record.benefitsAchieved || "-",
+                              "text-xs",
+                              50,
+                            )}
                             <td className="text-xs">{record.createdByName}</td>
                             <td>
                               <div className="flex gap-1">

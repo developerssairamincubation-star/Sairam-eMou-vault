@@ -78,6 +78,7 @@ export type EMoUFormData = Omit<EMoURecord, 'id' | 'createdBy' | 'createdByName'
 export interface FilterOptions {
   department?: DepartmentCode | 'all';
   status?: EMoUStatus | 'all';
+  goingForRenewal?: 'Yes' | 'No';
   fromDate?: string;
   toDate?: string;
   searchTerm?: string;

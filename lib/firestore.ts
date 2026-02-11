@@ -152,11 +152,15 @@ export async function getEMoUs(filters?: FilterOptions): Promise<EMoURecord[]> {
   if (filters?.department && filters.department !== 'all') {
     constraints.push(where('department', '==', filters.department));
   }
-  
+
+  if (filters?.goingForRenewal) {
+    constraints.push(where('goingForRenewal', '==', filters.goingForRenewal));
+  }
+
   if (filters?.status && filters.status !== 'all') {
     constraints.push(where('status', '==', filters.status));
   }
-  
+
   constraints.push(orderBy('createdAt', 'desc'));
   
   const q = query(collection(db, EMOU_COLLECTION), ...constraints);
@@ -194,6 +198,10 @@ export async function getEMoUsCount(filters?: FilterOptions, approvalStatus?: st
   if (filters?.department && filters.department !== 'all') {
     constraints.push(where('department', '==', filters.department));
   }
+
+  if (filters?.goingForRenewal) {
+    constraints.push(where('goingForRenewal', '==', filters.goingForRenewal));
+  }
   
   if (filters?.status && filters.status !== 'all') {
     constraints.push(where('status', '==', filters.status));
@@ -217,6 +225,10 @@ export async function getEMoUsPaginated(
   
   if (filters?.department && filters.department !== 'all') {
     constraints.push(where('department', '==', filters.department));
+  }
+
+  if (filters?.goingForRenewal) {
+    constraints.push(where('goingForRenewal', '==',filters.goingForRenewal));
   }
   
   if (filters?.status && filters.status !== 'all') {
@@ -278,6 +290,10 @@ export async function getEMoUsPage(
   
   if (filters?.department && filters.department !== 'all') {
     constraints.push(where('department', '==', filters.department));
+  }
+
+  if (filters?.goingForRenewal) {
+    constraints.push(where('goingForRenewal', '==', filters.goingForRenewal));
   }
   
   if (filters?.status && filters.status !== 'all') {
