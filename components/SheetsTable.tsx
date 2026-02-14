@@ -782,7 +782,7 @@ export function SheetsTable({
                                 ))}
                               </select>
                             ) : (
-                              cleanDisplayValue(record[column.key])
+                              cleanDisplayValue(record[column.key]) as React.ReactNode
                             )}
                           </td>
                         );

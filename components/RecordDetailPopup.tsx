@@ -311,19 +311,46 @@ export default function RecordDetailPopup({
                         </div>
                       )}
 
-                      <span
-                        className={`px-2.5 py-1 rounded-md text-xs font-medium ${
-                          record.status === "Active"
-                            ? "bg-green-100 text-green-700"
-                            : record.status === "Expired"
-                              ? "bg-red-100 text-red-700"
-                              : record.status === "Renewal Pending"
-                                ? "bg-orange-100 text-orange-700"
-                                : "bg-gray-100 text-gray-700"
-                        }`}
-                      >
-                        {record.status}
-                      </span>
+                      {type === "renewal" &&
+                      record.goingForRenewal === "Yes" ? (
+                        <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-orange-100 text-orange-700">
+                          Going for Renewal
+                        </span>
+                      ) : type === "draft" ? (
+                        <span
+                          className={`px-2.5 py-1 rounded-md text-xs font-medium ${
+                            record.approvalStatus === "pending"
+                              ? "bg-yellow-100 text-yellow-700"
+                              : record.approvalStatus === "draft"
+                                ? "bg-gray-100 text-gray-700"
+                                : record.approvalStatus === "rejected"
+                                  ? "bg-red-100 text-red-700"
+                                  : "bg-blue-100 text-blue-700"
+                          }`}
+                        >
+                          {record.approvalStatus === "pending"
+                            ? "Pending Approval"
+                            : record.approvalStatus === "draft"
+                              ? "Draft"
+                              : record.approvalStatus === "rejected"
+                                ? "Rejected"
+                                : record.approvalStatus || "Unknown"}
+                        </span>
+                      ) : (
+                        <span
+                          className={`px-2.5 py-1 rounded-md text-xs font-medium ${
+                            record.status === "Active"
+                              ? "bg-green-100 text-green-700"
+                              : record.status === "Expired"
+                                ? "bg-red-100 text-red-700"
+                                : record.status === "Renewal Pending"
+                                  ? "bg-orange-100 text-orange-700"
+                                  : "bg-gray-100 text-gray-700"
+                          }`}
+                        >
+                          {record.status}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

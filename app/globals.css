@@ -121,6 +121,7 @@ textarea:disabled {
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
+  cursor: alias;
 }
 
 ::-webkit-scrollbar-track {

@@ -24,7 +24,6 @@ import {
   FiCheck,
   FiX,
   FiClock,
-  FiEye,
   FiArrowLeft,
   FiUserPlus,
   FiCalendar,
@@ -806,7 +805,21 @@ function AdminPage() {
   const renderRecordTable = (
     records: EMoURecord[],
     showApprovalActions: boolean,
+    section: "pending" | "draft" | "approved" = "pending",
   ) => {
+    // Calculate sticky positions based on section
+    const getStickyRight = (position: "doc" | "ho" | "signed") => {
+      if (section === "pending") {
+        // Pending section positions (modifiable)
+        return { doc: 384, ho: 253, signed: 140 }[position];
+      } else if (section === "draft") {
+        // Draft section positions (keep original)
+        return { doc: 339, ho: 253, signed: 167 }[position];
+      } else {
+        // Approved section positions (keep original)
+        return { doc: 300, ho: 214, signed: 87 }[position];
+      }
+    };
     // Helper function to get field type icon
     const getFieldTypeIcon = (field: keyof EMoURecord) => {
       const dateFields = ["fromDate", "toDate"];
@@ -966,6 +979,21 @@ function AdminPage() {
               overflow-x: auto;
               white-space: nowrap;
             }
+            .sheet-table tbody tr {
+              position: relative;
+              z-index: 0;
+            }
+            .sheet-table td.editing-cell {
+              overflow: visible !important;
+              position: relative;
+              z-index: 9999 !important;
+            }
+            .sheet-table tbody tr:has(.editing-cell) {
+              z-index: 9998 !important;
+            }
+            .sheet-table tbody tr:has(.editing-cell) td:not(.editing-cell) {
+              z-index: 1 !important;
+            }
             .sheet-table td::-webkit-scrollbar {
               height: 3px;
             }
@@ -1009,10 +1037,56 @@ function AdminPage() {
                 <th style={{ width: "80px" }}>Renewal</th>
                 <th style={{ minWidth: "200px" }}>Benefits Achieved</th>
                 <th style={{ width: "120px" }}>Created By</th>
-                <th style={{ width: "150px", position: "sticky", right: showApprovalActions ? 335 : 160, zIndex: 12, background: "#fff", boxShadow: "-2px 0 4px rgba(0,0,0,0.06)" }}>Doc Availability</th>
-                <th style={{ width: "180px", position: "sticky", right: showApprovalActions ? 250 : 120, zIndex: 12, background: "#fff" }}>HO Approval</th>
-                <th style={{ width: "180px", position: "sticky", right: showApprovalActions ? 165 : 45, zIndex: 12, background: "#fff", boxShadow: "-2px 0 4px rgba(0,0,0,0.04)" }}>Signed Agreement</th>
-                <th style={{ width: showApprovalActions ? "200px" : "100px", position: "sticky", right: 0, zIndex: 12, background: "#fff" }}>
+                <th
+                  style={{
+                    width: "150px",
+                    position: "sticky",
+                    right: showApprovalActions
+                      ? getStickyRight("doc")
+                      : getStickyRight("doc"),
+                    zIndex: 12,
+                    background: "#fff",
+                    boxShadow: "-2px 0 4px rgba(0,0,0,0.06)",
+                  }}
+                >
+                  Doc Availability
+                </th>
+                <th
+                  style={{
+                    width: "180px",
+                    position: "sticky",
+                    right: showApprovalActions
+                      ? getStickyRight("ho")
+                      : getStickyRight("ho"),
+                    zIndex: 12,
+                    background: "#fff",
+                  }}
+                >
+                  HO Approval
+                </th>
+                <th
+                  style={{
+                    width: "180px",
+                    position: "sticky",
+                    right: showApprovalActions
+                      ? getStickyRight("signed")
+                      : getStickyRight("signed"),
+                    zIndex: 12,
+                    background: "#fff",
+                    boxShadow: "-2px 0 4px rgba(0,0,0,0.04)",
+                  }}
+                >
+                  Signed Agreement
+                </th>
+                <th
+                  style={{
+                    width: showApprovalActions ? "200px" : "100px",
+                    position: "sticky",
+                    right: 0,
+                    zIndex: 12,
+                    background: "#fff",
+                  }}
+                >
                   Actions
                 </th>
               </tr>
@@ -1037,8 +1111,15 @@ function AdminPage() {
 
                   return (
                     <td
-                      className="text-center cursor-pointer hover:bg-blue-50 relative"
-                      style={isEditing ? { padding: 0, overflow: "visible" as const, ...extraStyle } : extraStyle}
+                      className={`text-center cursor-pointer hover:bg-blue-50 relative ${isEditing ? "editing-cell" : ""}`}
+                      style={
+                        isEditing
+                          ? {
+                              padding: 0,
+                              ...extraStyle,
+                            }
+                          : extraStyle
+                      }
                       onClick={() => {
                         if (!isEditing) {
                           handleCellClick(record, field);
@@ -1388,9 +1469,23 @@ function AdminPage() {
                         { value: "Not Available", label: "Not Available" },
                       ],
                       "Not Available",
-                      { position: "sticky" as const, right: showApprovalActions ? 335 : 160, zIndex: 2, background: "#fff", boxShadow: "-2px 0 4px rgba(0,0,0,0.06)" },
+                      {
+                        position: "sticky" as const,
+                        right: getStickyRight("doc"),
+                        zIndex: 2,
+                        background: "#fff",
+                        boxShadow: "-2px 0 4px rgba(0,0,0,0.06)",
+                      },
                     )}
-                    <td className="text-xs text-center" style={{ position: "sticky", right: showApprovalActions ? 250 : 120, zIndex: 2, background: "#fff" }}>
+                    <td
+                      className="text-xs text-center"
+                      style={{
+                        position: "sticky",
+                        right: getStickyRight("ho"),
+                        zIndex: 2,
+                        background: "#fff",
+                      }}
+                    >
                       <div className="flex gap-1 items-center justify-center">
                         {record.hodApprovalDoc && (
                           <button
@@ -1413,8 +1508,7 @@ function AdminPage() {
                             className={`relative cursor-pointer px-2 py-1 text-white rounded transition-colors flex items-center gap-1 text-xs ${record.hodApprovalDoc ? "bg-blue-600 hover:bg-blue-700" : "bg-green-600 hover:bg-green-700"}`}
                           >
                             {uploadingDoc?.recordId === record.id &&
-                            uploadingDoc?.field ===
-                              "hodApprovalDoc" ? (
+                            uploadingDoc?.field === "hodApprovalDoc" ? (
                               <span className="flex items-center gap-1">
                                 <div className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
                                 Uploading...
@@ -1422,9 +1516,7 @@ function AdminPage() {
                             ) : (
                               <span className="flex items-center gap-1">
                                 <FiUpload />
-                                {record.hodApprovalDoc
-                                  ? "Replace"
-                                  : "Upload"}
+                                {record.hodApprovalDoc ? "Replace" : "Upload"}
                               </span>
                             )}
                             <input
@@ -1442,10 +1534,8 @@ function AdminPage() {
                                 e.target.value = "";
                               }}
                               disabled={
-                                uploadingDoc?.recordId ===
-                                  record.id &&
-                                uploadingDoc?.field ===
-                                  "hodApprovalDoc"
+                                uploadingDoc?.recordId === record.id &&
+                                uploadingDoc?.field === "hodApprovalDoc"
                               }
                               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                               onClick={(e) => e.stopPropagation()}
@@ -1455,7 +1545,16 @@ function AdminPage() {
                         {!record.hodApprovalDoc}
                       </div>
                     </td>
-                    <td className="text-xs text-center" style={{ position: "sticky", right: showApprovalActions ? 165 : 45, zIndex: 2, background: "#fff", boxShadow: "-2px 0 4px rgba(0,0,0,0.04)" }}>
+                    <td
+                      className="text-xs text-center"
+                      style={{
+                        position: "sticky",
+                        right: getStickyRight("signed"),
+                        zIndex: 2,
+                        background: "#fff",
+                        boxShadow: "-2px 0 4px rgba(0,0,0,0.04)",
+                      }}
+                    >
                       <div className="flex gap-1 items-center justify-center">
                         {record.signedAgreementDoc && (
                           <button
@@ -1478,8 +1577,7 @@ function AdminPage() {
                             className={`relative cursor-pointer px-2 py-1 text-white rounded transition-colors flex items-center gap-1 text-xs ${record.signedAgreementDoc ? "bg-blue-600 hover:bg-blue-700" : "bg-green-600 hover:bg-green-700"}`}
                           >
                             {uploadingDoc?.recordId === record.id &&
-                            uploadingDoc?.field ===
-                              "signedAgreementDoc" ? (
+                            uploadingDoc?.field === "signedAgreementDoc" ? (
                               <span className="flex items-center gap-1">
                                 <div className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
                                 Uploading...
@@ -1507,10 +1605,8 @@ function AdminPage() {
                                 e.target.value = "";
                               }}
                               disabled={
-                                uploadingDoc?.recordId ===
-                                  record.id &&
-                                uploadingDoc?.field ===
-                                  "signedAgreementDoc"
+                                uploadingDoc?.recordId === record.id &&
+                                uploadingDoc?.field === "signedAgreementDoc"
                               }
                               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                               onClick={(e) => e.stopPropagation()}
@@ -1520,9 +1616,16 @@ function AdminPage() {
                         {!record.signedAgreementDoc}
                       </div>
                     </td>
-                    <td style={{ position: "sticky", right: 0, zIndex: 2, background: "#fff" }}>
-                      <div className="flex flex-row gap-1">
-                        {showApprovalActions && (
+                    <td
+                      style={{
+                        position: "sticky",
+                        right: 0,
+                        zIndex: 2,
+                        background: "#fff",
+                      }}
+                    >
+                      <div className="flex flex-row gap-1 justify-center">
+                        {showApprovalActions ? (
                           <>
                             <button
                               onClick={() => handleApproveRecord(record.id)}
@@ -1547,6 +1650,14 @@ function AdminPage() {
                               </button>
                             )}
                           </>
+                        ) : (
+                          <button
+                            onClick={() => setViewingRecord(record)}
+                            className="px-2 py-1 text-[10px] font-medium bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                            title="View full record details"
+                          >
+                            View Details
+                          </button>
                         )}
                       </div>
                     </td>
@@ -2072,17 +2183,17 @@ function AdminPage() {
 
           {/* Pending Approvals Tab */}
           {activeTab === "pending" && (
-            <div>{renderRecordTable(pendingRecords, true)}</div>
+            <div>{renderRecordTable(pendingRecords, true, "pending")}</div>
           )}
 
           {/* Draft Records Tab */}
           {activeTab === "drafts" && (
-            <div>{renderRecordTable(draftRecords, true)}</div>
+            <div>{renderRecordTable(draftRecords, true, "draft")}</div>
           )}
 
           {/* Approved Records Tab */}
           {activeTab === "approved" && (
-            <div>{renderRecordTable(approvedRecords, false)}</div>
+            <div>{renderRecordTable(approvedRecords, false, "approved")}</div>
           )}
         </div>
 

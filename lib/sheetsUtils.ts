@@ -165,7 +165,7 @@ export function truncateText(text: string, maxLength: number): string {
 /**
  * Filter out invalid placeholder values
  */
-export function cleanDisplayValue(value: unknown): unknown {
+export function cleanDisplayValue(value: unknown): string | number | boolean | null | undefined {
   if (value === "file chosen") return "";
-  return value;
+  return value as string | number | boolean | null | undefined;
 }

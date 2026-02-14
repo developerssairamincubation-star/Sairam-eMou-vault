@@ -265,6 +265,7 @@ export function CellDropdown({
 }: CellDropdownProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const optionsRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
 
   // Calculate initial highlighted index based on current value
   const initialHighlightedIndex = useMemo(() => {
@@ -277,6 +278,17 @@ export function CellDropdown({
   );
 
   const selectedOption = options.find((opt) => opt.value === value);
+
+  // Calculate position on mount
+  useEffect(() => {
+    if (dropdownRef.current) {
+      const rect = dropdownRef.current.getBoundingClientRect();
+      setPosition({
+        top: rect.top,
+        left: rect.left,
+      });
+    }
+  }, []);
 
   const handleSelect = useCallback(
     (selectedValue: string) => {
@@ -349,15 +361,19 @@ export function CellDropdown({
   }, [highlightedIndex]);
 
   return (
-    <div ref={dropdownRef} className="relative">
-      {/* Dropdown Options - absolutely positioned */}
+    <div ref={dropdownRef} className="relative z-[10000]">
+      {/* Dropdown Options - fixed positioned to break out of table stacking context */}
       <div
         ref={optionsRef}
         className="
-          absolute left-0 top-0 z-[100] min-w-[180px]
+          fixed z-[10000] min-w-[180px]
           bg-white border-2 border-black rounded-lg shadow-xl
           max-h-[240px] overflow-auto
         "
+        style={{
+          top: `${position.top}px`,
+          left: `${position.left}px`,
+        }}
       >
         {/* Header showing current selection */}
         <div className="sticky top-0 bg-neutral-100 border-b border-black px-3 py-2">

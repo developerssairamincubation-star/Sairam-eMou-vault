@@ -1248,7 +1248,7 @@ function HomePage() {
           ) : (
             <>
               {/* Summary Cards */}
-              <div className="grid grid-cols-7 gap-2 mb-3">
+              <div className="grid grid-cols-6 gap-2 mb-3">
                 <div
                   className={`bg-white p-1.5 rounded border cursor-pointer transition-all hover:shadow-md ${
                     selectedStatus === "all"
@@ -1300,19 +1300,6 @@ function HomePage() {
                     {stats.expired}
                   </div>
                   <div className="text-[10px] text-[#6b7280]">Expired</div>
-                </div>
-                <div
-                  className={`bg-white p-1.5 rounded border cursor-pointer transition-all hover:shadow-md ${
-                    selectedStatus === "Draft"
-                      ? "border-gray-600 ring-2 ring-gray-600"
-                      : "border-[#d1d5db]"
-                  }`}
-                  onClick={() => setSelectedStatus("Draft")}
-                >
-                  <div className="text-base font-semibold text-gray-600">
-                    {stats.draft}
-                  </div>
-                  <div className="text-[10px] text-[#6b7280]">Draft</div>
                 </div>
                 <div
                   className={`bg-white p-1.5 rounded border cursor-pointer transition-all hover:shadow-md ${
