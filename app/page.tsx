@@ -32,6 +32,56 @@ import {
 } from "react-icons/fi";
 import { MdDashboard, MdAdminPanelSettings } from "react-icons/md";
 
+/**
+ * Helper function to get sticky column positioning styles based on user role
+ * Calculates right position for sticky columns in the table
+ *
+ * @param columnName - Name of the column ('actions', 'signedAgreement', 'hodApproval', 'docAvailability')
+ * @param role - User role ('admin', 'hod', 'master')
+ * @param isHeader - Whether this is for a header cell (affects zIndex)
+ * @returns Style object with position, right, zIndex, and background
+ */
+function getStickyPosition(
+  columnName: "actions" | "signedAgreement" | "hodApproval" | "docAvailability",
+  role: "admin" | "hod" | "master" = "admin",
+  isHeader: boolean = false,
+) {
+  // Calculate sticky positions based on role
+  const getStickyRight = (position: "doc" | "ho" | "signed" | "actions") => {
+    if (role === "admin") {
+      // Admin role positions
+      return { doc: 323, ho: 237, signed: 110, actions: 0 }[position];
+    } else if (role === "hod") {
+      // HOD role positions
+      return { doc: 232, ho: 162, signed: 82, actions: 0 }[position];
+    } else {
+      // Master role positions
+      return { doc: 363, ho: 277, signed: 150, actions: 0 }[position];
+    }
+  };
+
+  // Map column names to position keys
+  const positionMap = {
+    docAvailability: "doc" as const,
+    hodApproval: "ho" as const,
+    signedAgreement: "signed" as const,
+    actions: "actions" as const,
+  };
+
+  const position = getStickyRight(positionMap[columnName]);
+
+  return {
+    position: "sticky" as const,
+    right: position,
+    zIndex: isHeader ? 12 : 2,
+    background: "#fff",
+    ...(columnName === "actions" &&
+      isHeader && {
+        boxShadow: "-2px 0 5px rgba(0, 0, 0, 0.1)",
+      }),
+  };
+}
+
 function HomePage() {
   const { user, signOut, canEdit, canDelete, firebaseUser } = useAuth();
   const router = useRouter();
@@ -1070,7 +1120,7 @@ function HomePage() {
               </div>
               <div className="flex items-center gap-3">
                 <div className="text-xs text-[#6b7280]">
-                  {user?.displayName} ({user?.role})
+                  {user?.displayName}
                 </div>
                 <button
                   onClick={() => router.push("/dashboard")}
@@ -1099,7 +1149,7 @@ function HomePage() {
                     onClick={() => router.push("/hod")}
                     className="btn btn-secondary flex items-center gap-2"
                   >
-                    <MdDashboard /> HOD Dashboard
+                    <MdDashboard /> HOD Panel
                   </button>
                 )}
                 <button
@@ -1121,7 +1171,16 @@ function HomePage() {
                   <FiPlus /> New MOU
                 </button>
                 <button
-                  onClick={signOut}
+                  onClick={() =>
+                    setConfirmDialog({
+                      title: "Confirm Logout",
+                      message: "Are you sure you want to logout?",
+                      onConfirm: () => {
+                        setConfirmDialog(null);
+                        signOut();
+                      },
+                    })
+                  }
                   className="btn btn-secondary flex items-center gap-2"
                 >
                   <FiLogOut /> Logout
@@ -1402,10 +1461,11 @@ function HomePage() {
                         <th
                           style={{
                             width: "150px",
-                            position: "sticky",
-                            right: 320,
-                            zIndex: 12,
-                            background: "#fff",
+                            ...getStickyPosition(
+                              "docAvailability",
+                              user?.role,
+                              true,
+                            ),
                             boxShadow: "-2px 0 4px rgba(0,0,0,0.06)",
                           }}
                         >
@@ -1414,10 +1474,11 @@ function HomePage() {
                         <th
                           style={{
                             width: "180px",
-                            position: "sticky",
-                            right: 235,
-                            zIndex: 12,
-                            background: "#fff",
+                            ...getStickyPosition(
+                              "hodApproval",
+                              user?.role,
+                              true,
+                            ),
                           }}
                         >
                           HO Approval
@@ -1425,10 +1486,11 @@ function HomePage() {
                         <th
                           style={{
                             width: "180px",
-                            position: "sticky",
-                            right: 110,
-                            zIndex: 12,
-                            background: "#fff",
+                            ...getStickyPosition(
+                              "signedAgreement",
+                              user?.role,
+                              true,
+                            ),
                             boxShadow: "-2px 0 4px rgba(0,0,0,0.04)",
                           }}
                         >
@@ -1437,10 +1499,7 @@ function HomePage() {
                         <th
                           style={{
                             width: "100px",
-                            position: "sticky",
-                            right: 0,
-                            zIndex: 12,
-                            background: "#fff",
+                            ...getStickyPosition("actions", user?.role, true),
                           }}
                         >
                           Actions
@@ -2238,10 +2297,12 @@ function HomePage() {
                                 <td
                                   className={`text-xs relative ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
                                   style={{
-                                    position: "sticky",
-                                    right: 320,
+                                    ...getStickyPosition(
+                                      "docAvailability",
+                                      user?.role,
+                                      false,
+                                    ),
                                     zIndex: isEditing ? 50 : 2,
-                                    background: "#fff",
                                     boxShadow: "-2px 0 4px rgba(0,0,0,0.06)",
                                     ...cellStyle,
                                   }}
@@ -2302,10 +2363,11 @@ function HomePage() {
                             <td
                               className="text-xs text-center"
                               style={{
-                                position: "sticky",
-                                right: 235,
-                                zIndex: 2,
-                                background: "#fff",
+                                ...getStickyPosition(
+                                  "hodApproval",
+                                  user?.role,
+                                  false,
+                                ),
                               }}
                             >
                               <div className="flex gap-1 items-center justify-center">
@@ -2379,10 +2441,11 @@ function HomePage() {
                             <td
                               className="text-xs text-center"
                               style={{
-                                position: "sticky",
-                                right: 110,
-                                zIndex: 2,
-                                background: "#fff",
+                                ...getStickyPosition(
+                                  "signedAgreement",
+                                  user?.role,
+                                  false,
+                                ),
                                 boxShadow: "-2px 0 4px rgba(0,0,0,0.04)",
                               }}
                             >
@@ -2456,10 +2519,11 @@ function HomePage() {
                             </td>
                             <td
                               style={{
-                                position: "sticky",
-                                right: 0,
-                                zIndex: 2,
-                                background: "#fff",
+                                ...getStickyPosition(
+                                  "actions",
+                                  user?.role,
+                                  false,
+                                ),
                               }}
                             >
                               <div className="flex gap-1">

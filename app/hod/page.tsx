@@ -341,12 +341,14 @@ function HODPage() {
                             {record.hodApprovalDoc ? (
                               <div className="flex items-center gap-2">
                                 <button
-                                  onClick={() =>
-                                    setViewingDocument({
-                                      url: record.hodApprovalDoc!,
-                                      title: `HO Approval - ${record.companyName}`,
-                                    })
-                                  }
+                                  onClick={() => {
+                                    if (record.hodApprovalDoc) {
+                                      setViewingDocument({
+                                        url: record.hodApprovalDoc,
+                                        title: `HO Approval - ${record.companyName}`,
+                                      });
+                                    }
+                                  }}
                                   className="text-xs text-blue-600 hover:text-blue-800 underline"
                                 >
                                   View
@@ -394,12 +396,14 @@ function HODPage() {
                             {record.signedAgreementDoc ? (
                               <div className="flex items-center gap-2">
                                 <button
-                                  onClick={() =>
-                                    setViewingDocument({
-                                      url: record.signedAgreementDoc!,
-                                      title: `Signed Agreement - ${record.companyName}`,
-                                    })
-                                  }
+                                  onClick={() => {
+                                    if (record.signedAgreementDoc) {
+                                      setViewingDocument({
+                                        url: record.signedAgreementDoc,
+                                        title: `Signed Agreement - ${record.companyName}`,
+                                      });
+                                    }
+                                  }}
                                   className="text-xs text-blue-600 hover:text-blue-800 underline"
                                 >
                                   View
@@ -501,30 +505,42 @@ function HODPage() {
                           <td className="text-xs">{record.fromDate}</td>
                           <td className="text-xs">{record.toDate}</td>
                           <td>
-                            <button
-                              onClick={() =>
-                                setViewingDocument({
-                                  url: record.hodApprovalDoc!,
-                                  title: `HO Approval - ${record.companyName}`,
-                                })
-                              }
-                              className="text-xs text-blue-600 hover:text-blue-800 underline"
-                            >
-                              View Document
-                            </button>
+                            {record.hodApprovalDoc ? (
+                              <button
+                                onClick={() =>
+                                  setViewingDocument({
+                                    url: record.hodApprovalDoc!,
+                                    title: `HO Approval - ${record.companyName}`,
+                                  })
+                                }
+                                className="text-xs text-blue-600 hover:text-blue-800 underline"
+                              >
+                                View Document
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-400">
+                                No document
+                              </span>
+                            )}
                           </td>
                           <td>
-                            <button
-                              onClick={() =>
-                                setViewingDocument({
-                                  url: record.signedAgreementDoc!,
-                                  title: `Signed Agreement - ${record.companyName}`,
-                                })
-                              }
-                              className="text-xs text-blue-600 hover:text-blue-800 underline"
-                            >
-                              View Document
-                            </button>
+                            {record.signedAgreementDoc ? (
+                              <button
+                                onClick={() =>
+                                  setViewingDocument({
+                                    url: record.signedAgreementDoc!,
+                                    title: `Signed Agreement - ${record.companyName}`,
+                                  })
+                                }
+                                className="text-xs text-blue-600 hover:text-blue-800 underline"
+                              >
+                                View Document
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-400">
+                                No document
+                              </span>
+                            )}
                           </td>
                           <td>
                             <span
@@ -590,30 +606,38 @@ function HODPage() {
                             </span>
                           </td>
                           <td>
-                            <button
-                              onClick={() =>
-                                setViewingDocument({
-                                  url: record.hodApprovalDoc!,
-                                  title: `HO Approval - ${record.companyName}`,
-                                })
-                              }
-                              className="text-xs text-blue-600 hover:text-blue-800 underline"
-                            >
-                              View
-                            </button>
+                            {record.hodApprovalDoc ? (
+                              <button
+                                onClick={() =>
+                                  setViewingDocument({
+                                    url: record.hodApprovalDoc!,
+                                    title: `HO Approval - ${record.companyName}`,
+                                  })
+                                }
+                                className="text-xs text-blue-600 hover:text-blue-800 underline"
+                              >
+                                View
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-400">-</span>
+                            )}
                           </td>
                           <td>
-                            <button
-                              onClick={() =>
-                                setViewingDocument({
-                                  url: record.signedAgreementDoc!,
-                                  title: `Signed Agreement - ${record.companyName}`,
-                                })
-                              }
-                              className="text-xs text-blue-600 hover:text-blue-800 underline"
-                            >
-                              View
-                            </button>
+                            {record.signedAgreementDoc ? (
+                              <button
+                                onClick={() =>
+                                  setViewingDocument({
+                                    url: record.signedAgreementDoc!,
+                                    title: `Signed Agreement - ${record.companyName}`,
+                                  })
+                                }
+                                className="text-xs text-blue-600 hover:text-blue-800 underline"
+                              >
+                                View
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-400">-</span>
+                            )}
                           </td>
                         </tr>
                       ))}

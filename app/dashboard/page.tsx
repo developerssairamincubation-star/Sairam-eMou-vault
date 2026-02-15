@@ -165,6 +165,9 @@ export default function Dashboard() {
     type: string;
     title: string;
   }>({ isOpen: false, type: "", title: "" });
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [monthRangeStart, setMonthRangeStart] = useState(0); // 0 = Jan
+  const [monthRangeEnd, setMonthRangeEnd] = useState(11); // 11 = Dec
 
   useEffect(() => {
     loadRecords();
@@ -340,8 +343,11 @@ export default function Dashboard() {
     return years;
   };
 
-  const getCurrentYearMonthly = () => {
-    const currentYear = new Date().getFullYear();
+  const getCurrentYearMonthly = (
+    year: number,
+    startMonth: number,
+    endMonth: number,
+  ) => {
     const monthData: {
       [key: string]: {
         count: number;
@@ -377,7 +383,7 @@ export default function Dashboard() {
       };
     });
 
-    // Count only approved records for current year based on fromDate
+    // Count only approved records for selected year based on fromDate
     const approvedOnly = records.filter((r) => r.approvalStatus === "approved");
     approvedOnly.forEach((record) => {
       if (record.fromDate) {
@@ -386,9 +392,13 @@ export default function Dashboard() {
           const parts = record.fromDate.split(".");
           if (parts.length === 3) {
             const month = parseInt(parts[1]) - 1; // JavaScript months are 0-indexed
-            const year = parseInt(parts[2]);
+            const recordYear = parseInt(parts[2]);
 
-            if (year === currentYear) {
+            if (
+              recordYear === year &&
+              month >= startMonth &&
+              month <= endMonth
+            ) {
               const monthKey = months[month];
               if (monthKey && monthData[monthKey]) {
                 const status = getDisplayStatus(record);
@@ -407,7 +417,8 @@ export default function Dashboard() {
       }
     });
 
-    return months.map((month) => ({
+    // Return only the selected month range
+    return months.slice(startMonth, endMonth + 1).map((month) => ({
       month,
       count: monthData[month].count,
       active: monthData[month].active,
@@ -418,7 +429,26 @@ export default function Dashboard() {
   };
 
   const yearlyTrends = getYearlyTrends();
-  const currentYearMonthly = getCurrentYearMonthly();
+  const currentYearMonthly = getCurrentYearMonthly(
+    selectedYear,
+    monthRangeStart,
+    monthRangeEnd,
+  );
+
+  // Get available years from records
+  const availableYears = useMemo(() => {
+    const years = new Set<number>();
+    records.forEach((record) => {
+      if (record.fromDate) {
+        const parts = record.fromDate.split(".");
+        if (parts.length === 3) {
+          const year = parseInt(parts[2]);
+          if (!isNaN(year)) years.add(year);
+        }
+      }
+    });
+    return Array.from(years).sort((a, b) => b - a); // Descending order
+  }, [records]);
 
   // Helper function to show filtered records in popup
   const showRecords = (
@@ -1049,17 +1079,68 @@ export default function Dashboard() {
 
               {/* Current Year Monthly Area Chart */}
               <div className="col-span-6 bg-white rounded-lg p-3 border border-gray-200">
-                <h3 className="text-xs font-bold text-gray-700 mb-2 uppercase">
-                  2026 Monthly Activity
-                </h3>
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="text-xs font-bold text-gray-700 uppercase">
+                    {selectedYear} Monthly Activity
+                  </h3>
+                  <div className="flex gap-2 items-center">
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(Number(e.target.value))}
+                      className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      {availableYears.map((year) => (
+                        <option key={year} value={year}>
+                          {year}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={`${monthRangeStart}-${monthRangeEnd}`}
+                      onChange={(e) => {
+                        const [start, end] = e.target.value
+                          .split("-")
+                          .map(Number);
+                        setMonthRangeStart(start);
+                        setMonthRangeEnd(end);
+                      }}
+                      className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="0-11">All Year</option>
+                      <option value="0-2">Q1 (Jan-Mar)</option>
+                      <option value="3-5">Q2 (Apr-Jun)</option>
+                      <option value="6-8">Q3 (Jul-Sep)</option>
+                      <option value="9-11">Q4 (Oct-Dec)</option>
+                      <option value="0-5">H1 (Jan-Jun)</option>
+                      <option value="6-11">H2 (Jul-Dec)</option>
+                    </select>
+                  </div>
+                </div>
                 <div
-                  onDoubleClick={() =>
+                  onDoubleClick={() => {
+                    const monthRangeText =
+                      monthRangeStart === 0 && monthRangeEnd === 11
+                        ? "All Year"
+                        : monthRangeStart === 0 && monthRangeEnd === 2
+                          ? "Q1"
+                          : monthRangeStart === 3 && monthRangeEnd === 5
+                            ? "Q2"
+                            : monthRangeStart === 6 && monthRangeEnd === 8
+                              ? "Q3"
+                              : monthRangeStart === 9 && monthRangeEnd === 11
+                                ? "Q4"
+                                : monthRangeStart === 0 && monthRangeEnd === 5
+                                  ? "H1"
+                                  : monthRangeStart === 6 &&
+                                      monthRangeEnd === 11
+                                    ? "H2"
+                                    : "Custom Range";
                     setGraphPopup({
                       isOpen: true,
                       type: "monthlyArea",
-                      title: "2026 Monthly Activity",
-                    })
-                  }
+                      title: `${selectedYear} Monthly Activity (${monthRangeText})`,
+                    });
+                  }}
                   style={{ cursor: "pointer" }}
                 >
                   <ResponsiveContainer width="100%" height={180}>
@@ -1245,11 +1326,7 @@ export default function Dashboard() {
                             nameKey="name"
                             label={({ name, percent }) => {
                               const deptName = name || "";
-                              const shortName =
-                                deptName.length > 6
-                                  ? deptName.substring(0, 6) + ".."
-                                  : deptName;
-                              return `${shortName} ${((percent || 0) * 100).toFixed(0)}%`;
+                              return `${deptName} ${((percent || 0) * 100).toFixed(0)}%`;
                             }}
                           >
                             {departmentStats
@@ -1380,7 +1457,7 @@ export default function Dashboard() {
                         const topDept = departmentStats
                           .filter((d) => d.count > 0)
                           .sort((a, b) => b.count - a.count)[0];
-                        return topDept ? topDept.name: "-";
+                        return topDept ? topDept.name : "-";
                       })()}
                     </div>
                     <div className="text-[10px] text-emerald-700 font-semibold">
