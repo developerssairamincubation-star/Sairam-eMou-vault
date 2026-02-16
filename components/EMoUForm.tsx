@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   EMoURecord,
   DepartmentCode,
@@ -11,6 +11,9 @@ import {
 } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { uploadToCloudinary, deleteFromCloudinary } from "@/lib/cloudinary";
+import ConfirmDialog from "@/components/ConfirmDialog";
+
+const LOCALSTORAGE_KEY = "emou_form_draft";
 
 interface EMoUFormProps {
   initialData?: EMoURecord;
@@ -35,6 +38,8 @@ const DEPARTMENTS: DepartmentCode[] = [
   "IOT",
   "EICE",
   "CSE MTECH",
+  "Institution",
+  "Incubation",
 ];
 const STATUSES: EMoUStatus[] = [
   "Active",
@@ -99,6 +104,8 @@ export default function EMoUForm({
     message: string;
     type: "success" | "error" | "info" | "warning";
   } | null>(null);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [hasLoadedFromStorage, setHasLoadedFromStorage] = useState(false);
   const [formData, setFormData] = useState({
     department:
       initialData?.department || (user?.department as DepartmentCode) || "CSE",
@@ -133,6 +140,114 @@ export default function EMoUForm({
     benefitsAchieved: initialData?.benefitsAchieved || "",
     companyRelationship: initialData?.companyRelationship || 3,
   });
+
+  // Perpetual/indefinite date state
+  const [isPerpetual, setIsPerpetual] = useState(() => {
+    // Check if toDate is perpetual (year >= 9000)
+    if (initialData?.toDate) {
+      const year = parseInt(initialData.toDate.split(".")[2] || "0");
+      return year >= 9000;
+    }
+    return false;
+  });
+
+  // Default form data for reset
+  const getDefaultFormData = useCallback(
+    () => ({
+      department: (user?.department as DepartmentCode) || "CSE",
+      companyName: "",
+      fromDate: "",
+      toDate: "",
+      status: "Draft" as const,
+      scope: "National" as ScopeType,
+      maintainedBy: "Departments" as MaintainedBy,
+      approvalStatus: "draft" as const,
+      scannedCopy: "",
+      documentAvailability: "Not Available" as const,
+      hodApprovalDoc: "",
+      signedAgreementDoc: "",
+      description: "",
+      companyWebsite: "",
+      aboutCompany: "",
+      companyAddress: "",
+      industryContactName: "",
+      industryContactMobile: "",
+      industryContactEmail: "",
+      institutionContactName: "",
+      institutionContactMobile: "",
+      institutionContactEmail: "",
+      clubsAligned: "",
+      sdgGoals: "",
+      skillsTechnologies: "",
+      perStudentCost: 0,
+      placementOpportunity: 0,
+      internshipOpportunity: 0,
+      goingForRenewal: "No" as const,
+      benefitsAchieved: "",
+      companyRelationship: 3 as const,
+    }),
+    [user?.department],
+  );
+
+  // Auto-load from localStorage on mount (only for new records)
+  useEffect(() => {
+    if (!initialData) {
+      try {
+        const saved = localStorage.getItem(LOCALSTORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          // Validate that parsed data has expected structure
+          if (
+            parsed &&
+            typeof parsed === "object" &&
+            parsed.companyName !== undefined
+          ) {
+            setFormData((prev) => ({ ...prev, ...parsed }));
+            // Check if the saved toDate is perpetual
+            if (parsed.toDate) {
+              const year = parseInt(parsed.toDate.split(".")[2] || "0");
+              setIsPerpetual(year >= 9000);
+            }
+          }
+        }
+      } catch (error) {
+        // If localStorage is corrupted, just clear it
+        console.error("Failed to load draft from localStorage:", error);
+        localStorage.removeItem(LOCALSTORAGE_KEY);
+      }
+    }
+    // Mark as loaded after first render
+    setHasLoadedFromStorage(true);
+  }, [initialData]);
+
+  // Auto-save to localStorage on formData change (only for new records)
+  useEffect(() => {
+    // Only start auto-saving after initial load is complete
+    if (!initialData && hasLoadedFromStorage) {
+      try {
+        localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify(formData));
+      } catch (error) {
+        console.error("Failed to save draft to localStorage:", error);
+      }
+    }
+  }, [formData, initialData, hasLoadedFromStorage]);
+
+  // Clear all form data and localStorage
+  const handleClearAll = useCallback(() => {
+    setShowClearConfirm(true);
+  }, []);
+
+  const confirmClearAll = useCallback(() => {
+    setFormData(getDefaultFormData());
+    setIsPerpetual(false);
+    localStorage.removeItem(LOCALSTORAGE_KEY);
+    setShowClearConfirm(false);
+    setShowAlert({
+      message: "Form cleared successfully!",
+      type: "success",
+    });
+    // Keep hasLoadedFromStorage true so auto-save continues working
+  }, [getDefaultFormData]);
 
   const doCloudinaryUpload = async (file: File): Promise<string> => {
     const result = await uploadToCloudinary(file);
@@ -199,7 +314,7 @@ export default function EMoUForm({
       } else {
         setFormData(updatedFormData);
       }
-    } catch (error) {
+    } catch {
       setShowAlert({
         message: "Failed to upload file. Please try again.",
         type: "error",
@@ -244,6 +359,17 @@ export default function EMoUForm({
 
   return (
     <>
+      {showClearConfirm && (
+        <ConfirmDialog
+          title="Clear All Data"
+          message="Are you sure you want to clear all form data? This action cannot be undone."
+          confirmText="Clear All"
+          cancelText="Cancel"
+          type="danger"
+          onConfirm={confirmClearAll}
+          onCancel={() => setShowClearConfirm(false)}
+        />
+      )}
       {showAlert && (
         <div className="fixed top-4 right-4 z-50">
           <div
@@ -292,6 +418,51 @@ export default function EMoUForm({
             )}
             <div>
               <label className="block text-xs font-medium text-[#4b5563] mb-1">
+                Maintained By <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.maintainedBy}
+                onChange={(e) => {
+                  const maintainedBy = e.target.value as MaintainedBy;
+                  let updatedDepartment = formData.department;
+
+                  // Auto-set department based on maintainedBy
+                  if (maintainedBy === "Institution") {
+                    updatedDepartment = "Institution";
+                  } else if (maintainedBy === "Incubation") {
+                    updatedDepartment = "Incubation";
+                  } else if (
+                    formData.department === "Institution" ||
+                    formData.department === "Incubation"
+                  ) {
+                    // Reset to user's department if switching from Institution/Incubation to Departments
+                    updatedDepartment =
+                      (user?.department as DepartmentCode) || "CSE";
+                  }
+
+                  setFormData({
+                    ...formData,
+                    maintainedBy,
+                    department: updatedDepartment,
+                  });
+                }}
+                required
+                className="w-full"
+              >
+                <option value="Institution">Institution</option>
+                <option value="Incubation">Incubation</option>
+                <option value="Departments">Departments</option>
+              </select>
+              {!initialData &&
+                (formData.maintainedBy === "Institution" ||
+                  formData.maintainedBy === "Incubation") && (
+                  <p className="text-xs text-blue-600 mt-1">
+                    Department will be auto-set to {formData.maintainedBy}
+                  </p>
+                )}
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[#4b5563] mb-1">
                 Department <span className="text-red-500">*</span>
               </label>
               <select
@@ -303,7 +474,12 @@ export default function EMoUForm({
                   })
                 }
                 required
-                disabled={user?.role === "hod" || !!initialData}
+                disabled={
+                  user?.role === "hod" ||
+                  !!initialData ||
+                  formData.maintainedBy === "Institution" ||
+                  formData.maintainedBy === "Incubation"
+                }
                 className="w-full"
               >
                 {DEPARTMENTS.map((dept) => (
@@ -359,26 +535,6 @@ export default function EMoUForm({
               >
                 <option value="National">National</option>
                 <option value="International">International</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-[#4b5563] mb-1">
-                Maintained By <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={formData.maintainedBy}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    maintainedBy: e.target.value as MaintainedBy,
-                  })
-                }
-                required
-                className="w-full"
-              >
-                <option value="Institution">Institution</option>
-                <option value="Incubation">Incubation</option>
-                <option value="Departments">Departments</option>
               </select>
             </div>
           </div>
@@ -522,21 +678,53 @@ export default function EMoUForm({
               <label className="block text-xs font-medium text-[#4b5563] mb-1">
                 To Date <span className="text-red-500">*</span>
               </label>
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  id="perpetual"
+                  checked={isPerpetual}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setIsPerpetual(checked);
+                    if (checked) {
+                      setFormData({
+                        ...formData,
+                        toDate: "31.12.9999",
+                      });
+                    } else {
+                      setFormData({
+                        ...formData,
+                        toDate: "",
+                      });
+                    }
+                  }}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label
+                  htmlFor="perpetual"
+                  className="text-xs text-[#4b5563] cursor-pointer"
+                >
+                  Perpetual / Indefinite
+                </label>
+              </div>
               <input
                 type="date"
-                value={toInputDate(formData.toDate)}
+                value={isPerpetual ? "" : toInputDate(formData.toDate)}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
                     toDate: toDisplayDate(e.target.value),
                   })
                 }
-                required
+                required={!isPerpetual}
+                disabled={isPerpetual}
                 min={toInputDate(formData.fromDate) || undefined}
-                className="w-full"
+                className={`w-full ${isPerpetual ? "bg-gray-100 cursor-not-allowed opacity-50" : ""}`}
               />
               {formData.toDate && (
-                <p className="text-xs text-[#6b7280] mt-1">{formData.toDate}</p>
+                <p className="text-xs text-[#6b7280] mt-1">
+                  {isPerpetual ? "Perpetual / Indefinite" : formData.toDate}
+                </p>
               )}
             </div>
             <div>
@@ -986,6 +1174,16 @@ export default function EMoUForm({
 
         {/* Form Actions */}
         <div className="flex justify-end gap-3 pt-4 border-t border-[#d1d5db]">
+          {!initialData && (
+            <button
+              type="button"
+              onClick={handleClearAll}
+              className="btn btn-secondary text-red-600 hover:text-red-700 hover:bg-red-50"
+              disabled={loading}
+            >
+              Clear All
+            </button>
+          )}
           <button
             type="button"
             onClick={onCancel}

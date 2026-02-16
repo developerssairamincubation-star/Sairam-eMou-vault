@@ -32,6 +32,56 @@ import {
 } from "react-icons/fi";
 import { MdDashboard, MdAdminPanelSettings } from "react-icons/md";
 
+/**
+ * Helper function to get sticky column positioning styles based on user role
+ * Calculates right position for sticky columns in the table
+ *
+ * @param columnName - Name of the column ('actions', 'signedAgreement', 'hodApproval', 'docAvailability')
+ * @param role - User role ('admin', 'hod', 'master')
+ * @param isHeader - Whether this is for a header cell (affects zIndex)
+ * @returns Style object with position, right, zIndex, and background
+ */
+function getStickyPosition(
+  columnName: "actions" | "signedAgreement" | "hodApproval" | "docAvailability",
+  role: "admin" | "hod" | "master" = "admin",
+  isHeader: boolean = false,
+) {
+  // Calculate sticky positions based on role
+  const getStickyRight = (position: "doc" | "ho" | "signed" | "actions") => {
+    if (role === "admin") {
+      // Admin role positions
+      return { doc: 323, ho: 237, signed: 110, actions: 0 }[position];
+    } else if (role === "hod") {
+      // HOD role positions
+      return { doc: 232, ho: 162, signed: 82, actions: 0 }[position];
+    } else {
+      // Master role positions
+      return { doc: 363, ho: 277, signed: 150, actions: 0 }[position];
+    }
+  };
+
+  // Map column names to position keys
+  const positionMap = {
+    docAvailability: "doc" as const,
+    hodApproval: "ho" as const,
+    signedAgreement: "signed" as const,
+    actions: "actions" as const,
+  };
+
+  const position = getStickyRight(positionMap[columnName]);
+
+  return {
+    position: "sticky" as const,
+    right: position,
+    zIndex: isHeader ? 12 : 2,
+    background: "#fff",
+    ...(columnName === "actions" &&
+      isHeader && {
+        boxShadow: "-2px 0 5px rgba(0, 0, 0, 0.1)",
+      }),
+  };
+}
+
 function HomePage() {
   const { user, signOut, canEdit, canDelete, firebaseUser } = useAuth();
   const router = useRouter();
@@ -200,16 +250,15 @@ function HomePage() {
         filters.status = selectedStatus as FilterOptions["status"];
       }
 
-      if (debouncedSearchTerm) {
-        filters.searchTerm = debouncedSearchTerm;
-      }
-
       // Show only approved records for all users (including admin on main sheet)
       const approvalStatus = "approved";
 
+      // When searching, fetch ALL records to search across entire dataset
+      // Otherwise, fetch current page
+      const shouldFetchAll = debouncedSearchTerm || showAll;
       const result = await getEMoUsPage(
-        showAll ? 1 : currentPage,
-        showAll ? 10000 : itemsPerPage,
+        shouldFetchAll ? 1 : currentPage,
+        shouldFetchAll ? 10000 : itemsPerPage,
         filters,
         approvalStatus,
       );
@@ -289,8 +338,12 @@ function HomePage() {
         });
       }
 
-      // Filter to only show records with at least one document uploaded
-      data = data.filter((r) => r.hodApprovalDoc || r.signedAgreementDoc);
+      // Filter for records with documents
+      if (selectedStatus === "With Docs") {
+        data = data.filter(
+          (record) => record.hodApprovalDoc || record.signedAgreementDoc,
+        );
+      }
 
       // Sort by department alphabetically (A-Z), then by ID sequential number
       data.sort((a, b) => {
@@ -301,9 +354,31 @@ function HomePage() {
         return aSeq - bSeq;
       });
 
-      setRecords(data);
-      setTotalCount(result.totalCount);
-      setTotalPages(result.totalPages);
+      // When searching or filtering, paginate the filtered results client-side
+      if (
+        debouncedSearchTerm ||
+        selectedStatus === "Expiring" ||
+        selectedStatus === "With Docs"
+      ) {
+        const filteredTotal = data.length;
+        const filteredPages = Math.ceil(filteredTotal / itemsPerPage);
+
+        // Paginate filtered results client-side
+        if (!showAll) {
+          const startIndex = (currentPage - 1) * itemsPerPage;
+          const endIndex = startIndex + itemsPerPage;
+          data = data.slice(startIndex, endIndex);
+        }
+
+        setRecords(data);
+        setTotalCount(filteredTotal);
+        setTotalPages(filteredPages);
+      } else {
+        // Use server-side pagination counts
+        setRecords(data);
+        setTotalCount(result.totalCount);
+        setTotalPages(result.totalPages);
+      }
 
       // Load stats separately
       loadStats();
@@ -453,50 +528,6 @@ function HomePage() {
       });
     } catch (error) {
       console.error("Failed to load stats:", error);
-    }
-  };
-
-  const handleCreateRecord = async (data: Partial<EMoURecord>) => {
-    if (!user) {
-      console.error("No user available");
-      setAlert({ message: "Please log in to create records", type: "error" });
-      return;
-    }
-
-    if (!user.uid) {
-      console.error("User object missing uid:", user);
-      setAlert({
-        message: "User session is invalid. Please log out and log back in.",
-        type: "error",
-      });
-      return;
-    }
-
-    try {
-      const now = new Date();
-      const recordData = {
-        ...data,
-        createdBy: user.uid,
-        createdByName: user.displayName,
-        createdAt: now,
-      };
-
-      console.log("Creating record with data:", {
-        createdBy: user.uid,
-        createdByName: user.displayName,
-      });
-
-      await createEMoU(recordData as Omit<EMoURecord, "id">);
-
-      setShowForm(false);
-      loadRecords();
-      setAlert({ message: "Record created successfully!", type: "success" });
-    } catch (error) {
-      console.error("Failed to create record:", error);
-      setAlert({
-        message: "Failed to create record. Check console for details.",
-        type: "error",
-      });
     }
   };
 
@@ -1012,7 +1043,7 @@ function HomePage() {
     }
   };
 
-  if (showForm) {
+  if (showForm && editingRecord) {
     return (
       <ProtectedRoute>
         {alert && (
@@ -1026,12 +1057,12 @@ function HomePage() {
           <div className="max-w-6xl mx-auto">
             <div className="mb-6">
               <h2 className="text-xl font-semibold text-[#1f2937]">
-                {editingRecord ? "Edit eMoU Record" : "New eMoU Record"}
+                Edit eMoU Record
               </h2>
             </div>
             <EMoUForm
-              initialData={editingRecord || undefined}
-              onSubmit={editingRecord ? handleUpdateRecord : handleCreateRecord}
+              initialData={editingRecord}
+              onSubmit={handleUpdateRecord}
               onCancel={() => {
                 setShowForm(false);
                 setEditingRecord(null);
@@ -1089,7 +1120,7 @@ function HomePage() {
               </div>
               <div className="flex items-center gap-3">
                 <div className="text-xs text-[#6b7280]">
-                  {user?.displayName} ({user?.role})
+                  {user?.displayName}
                 </div>
                 <button
                   onClick={() => router.push("/dashboard")}
@@ -1118,7 +1149,7 @@ function HomePage() {
                     onClick={() => router.push("/hod")}
                     className="btn btn-secondary flex items-center gap-2"
                   >
-                    <MdDashboard /> HOD Dashboard
+                    <MdDashboard /> HOD Panel
                   </button>
                 )}
                 <button
@@ -1134,13 +1165,22 @@ function HomePage() {
                   <FiUpload /> Import
                 </button>
                 <button
-                  onClick={() => setShowForm(true)}
+                  onClick={() => router.push("/create-emou")}
                   className="btn btn-primary flex items-center gap-2"
                 >
                   <FiPlus /> New MOU
                 </button>
                 <button
-                  onClick={signOut}
+                  onClick={() =>
+                    setConfirmDialog({
+                      title: "Confirm Logout",
+                      message: "Are you sure you want to logout?",
+                      onConfirm: () => {
+                        setConfirmDialog(null);
+                        signOut();
+                      },
+                    })
+                  }
                   className="btn btn-secondary flex items-center gap-2"
                 >
                   <FiLogOut /> Logout
@@ -1177,7 +1217,7 @@ function HomePage() {
                   { value: "all", label: "All Status" },
                   { value: "Active", label: "Active" },
                   { value: "Expired", label: "Expired" },
-                  { value: "Renewal Pending", label: "Renewal Pending" },
+                  { value: "Renewal Pending", label: "Renewal" },
                   { value: "Draft", label: "Draft" },
                 ]}
                 value={selectedStatus}
@@ -1250,7 +1290,7 @@ function HomePage() {
           ) : (
             <>
               {/* Summary Cards */}
-              <div className="grid grid-cols-7 gap-2 mb-3">
+              <div className="grid grid-cols-6 gap-2 mb-3">
                 <div
                   className={`bg-white p-1.5 rounded border cursor-pointer transition-all hover:shadow-md ${
                     selectedStatus === "all"
@@ -1305,19 +1345,6 @@ function HomePage() {
                 </div>
                 <div
                   className={`bg-white p-1.5 rounded border cursor-pointer transition-all hover:shadow-md ${
-                    selectedStatus === "Draft"
-                      ? "border-gray-600 ring-2 ring-gray-600"
-                      : "border-[#d1d5db]"
-                  }`}
-                  onClick={() => setSelectedStatus("Draft")}
-                >
-                  <div className="text-base font-semibold text-gray-600">
-                    {stats.draft}
-                  </div>
-                  <div className="text-[10px] text-[#6b7280]">Draft</div>
-                </div>
-                <div
-                  className={`bg-white p-1.5 rounded border cursor-pointer transition-all hover:shadow-md ${
                     selectedStatus === "Renewal Pending"
                       ? "border-purple-600 ring-2 ring-purple-600"
                       : "border-[#d1d5db]"
@@ -1348,7 +1375,7 @@ function HomePage() {
               <div
                 className="bg-white rounded-lg shadow-sm border border-gray-200"
                 style={{
-                  height: "calc(100vh - 220px)",
+                  height: "calc(100vh - 255px)",
                   minHeight: "400px",
                   display: "flex",
                   flexDirection: "column",
@@ -1364,15 +1391,17 @@ function HomePage() {
                   onMouseUp={handleMouseUp}
                   onMouseLeave={handleMouseLeave}
                 >
-                  <style jsx>{`
+                  <style jsx global>{`
                     .sheet-table {
                       min-width: 4000px;
-                      border-collapse: collapse;
+                      border-collapse: separate;
+                      border-spacing: 0;
                     }
                     .sheet-table th,
                     .sheet-table td {
                       padding: 4px 8px;
                       font-size: 11px;
+                      border-bottom: 1px solid #e5e7eb;
                     }
                     .sheet-table th {
                       font-size: 10px;
@@ -1392,7 +1421,7 @@ function HomePage() {
                       border-radius: 2px;
                     }
                     .sheet-table tbody tr {
-                      height: 35.5px;
+                      height: 34px;
                     }
                   `}</style>
                   <table className="sheet-table">
@@ -1407,10 +1436,6 @@ function HomePage() {
                         <th style={{ width: "100px" }}>From Date</th>
                         <th style={{ width: "100px" }}>To Date</th>
                         <th style={{ width: "110px" }}>Status</th>
-                        <th style={{ width: "150px" }}>Doc Availability</th>
-                        <th style={{ width: "180px" }}>HO Approval</th>
-                        <th style={{ width: "180px" }}>Signed Agreement</th>
-                        <th style={{ width: "100px" }}>Actions</th>
                         <th style={{ minWidth: "250px" }}>Description</th>
                         <th style={{ minWidth: "200px" }}>About Company</th>
                         <th style={{ minWidth: "200px" }}>Company Address</th>
@@ -1432,9 +1457,53 @@ function HomePage() {
                         <th style={{ width: "90px" }}>Internship</th>
                         <th style={{ width: "80px" }}>Renewal</th>
                         <th style={{ minWidth: "200px" }}>Benefits Achieved</th>
-
                         <th style={{ width: "120px" }}>Created By</th>
-                        
+                        <th
+                          style={{
+                            width: "150px",
+                            ...getStickyPosition(
+                              "docAvailability",
+                              user?.role,
+                              true,
+                            ),
+                            boxShadow: "-2px 0 4px rgba(0,0,0,0.06)",
+                          }}
+                        >
+                          Doc Availability
+                        </th>
+                        <th
+                          style={{
+                            width: "180px",
+                            ...getStickyPosition(
+                              "hodApproval",
+                              user?.role,
+                              true,
+                            ),
+                          }}
+                        >
+                          HO Approval
+                        </th>
+                        <th
+                          style={{
+                            width: "180px",
+                            ...getStickyPosition(
+                              "signedAgreement",
+                              user?.role,
+                              true,
+                            ),
+                            boxShadow: "-2px 0 4px rgba(0,0,0,0.04)",
+                          }}
+                        >
+                          Signed Agreement
+                        </th>
+                        <th
+                          style={{
+                            width: "100px",
+                            ...getStickyPosition("actions", user?.role, true),
+                          }}
+                        >
+                          Actions
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1949,247 +2018,6 @@ function HomePage() {
                                 </td>
                               );
                             })()}
-                            {(() => {
-                              const isEditing =
-                                editingCell?.recordId === record.id &&
-                                editingCell?.field === "documentAvailability";
-                              const cellStyle = isEditing
-                                ? {
-                                    padding: 0,
-                                    overflow: "visible" as const,
-                                  }
-                                : {};
-
-                              return (
-                                <td
-                                  className={`text-xs relative ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
-                                  onClick={() =>
-                                    isEditable &&
-                                    handleCellClick(
-                                      record,
-                                      "documentAvailability",
-                                    )
-                                  }
-                                  style={cellStyle}
-                                  title={
-                                    isEditable && !isEditing
-                                      ? "Click to edit"
-                                      : ""
-                                  }
-                                >
-                                  {isEditing ? (
-                                    <CellDropdown
-                                      options={[
-                                        {
-                                          value: "Available",
-                                          label: "Available",
-                                        },
-                                        {
-                                          value: "Not Available",
-                                          label: "Not Available",
-                                        },
-                                      ]}
-                                      value={
-                                        inlineEditData.documentAvailability ||
-                                        record.documentAvailability ||
-                                        "Not Available"
-                                      }
-                                      onChange={(value) =>
-                                        saveFieldDirectly(
-                                          "documentAvailability",
-                                          value,
-                                        )
-                                      }
-                                      onClose={cancelInlineEdit}
-                                      placeholder="Not Available"
-                                    />
-                                  ) : (
-                                    <span className="flex items-center justify-between gap-1">
-                                      <span>
-                                        {record.documentAvailability ||
-                                          "Not Available"}
-                                      </span>
-                                      <FiChevronDown
-                                        className="text-blue-600"
-                                        size={14}
-                                      />
-                                    </span>
-                                  )}
-                                </td>
-                              );
-                            })()}
-                            <td className="text-xs text-center">
-                              <div className="flex gap-1 items-center justify-center">
-                                {record.hodApprovalDoc && (
-                                  <button
-                                    onClick={() =>
-                                      setViewingDocument({
-                                        url: record.hodApprovalDoc!,
-                                        title: `HO Approval - ${record.companyName}`,
-                                      })
-                                    }
-                                    className="text-blue-600 hover:underline cursor-pointer text-xs"
-                                  >
-                                    View
-                                  </button>
-                                )}
-                                {user?.role === "admin" && (
-                                  <>
-                                    {record.hodApprovalDoc && (
-                                      <span className="text-gray-300">|</span>
-                                    )}
-                                    <label
-                                      className={`relative cursor-pointer px-2 py-1 text-white rounded transition-colors flex items-center gap-1 text-xs ${record.hodApprovalDoc ? "bg-blue-600 hover:bg-blue-700" : "bg-green-600 hover:bg-green-700"}`}
-                                    >
-                                      {uploadingDoc?.recordId === record.id &&
-                                      uploadingDoc?.field ===
-                                        "hodApprovalDoc" ? (
-                                        <span className="flex items-center gap-1">
-                                          <div className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
-                                          Uploading...
-                                        </span>
-                                      ) : (
-                                        <span className="flex items-center gap-1">
-                                          <FiUpload />
-                                          {record.hodApprovalDoc
-                                            ? "Replace"
-                                            : "Upload"}
-                                        </span>
-                                      )}
-                                      <input
-                                        type="file"
-                                        accept=".pdf,.doc,.docx,image/*"
-                                        onChange={(e) => {
-                                          const file = e.target.files?.[0];
-                                          if (file) {
-                                            handleFileUpload(
-                                              record.id,
-                                              "hodApprovalDoc",
-                                              file,
-                                            );
-                                          }
-                                          e.target.value = "";
-                                        }}
-                                        disabled={
-                                          uploadingDoc?.recordId ===
-                                            record.id &&
-                                          uploadingDoc?.field ===
-                                            "hodApprovalDoc"
-                                        }
-                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                        onClick={(e) => e.stopPropagation()}
-                                      />
-                                    </label>
-                                  </>
-                                )}
-                                {!record.hodApprovalDoc &&
-                                  user?.role !== "admin" &&
-                                  "-"}
-                              </div>
-                            </td>
-                            <td className="text-xs text-center">
-                              <div className="flex gap-1 items-center justify-center">
-                                {record.signedAgreementDoc && (
-                                  <button
-                                    onClick={() =>
-                                      setViewingDocument({
-                                        url: record.signedAgreementDoc!,
-                                        title: `Signed Agreement - ${record.companyName}`,
-                                      })
-                                    }
-                                    className="text-blue-600 hover:underline cursor-pointer text-xs"
-                                  >
-                                    View
-                                  </button>
-                                )}
-                                {user?.role === "admin" && (
-                                  <>
-                                    {record.signedAgreementDoc && (
-                                      <span className="text-gray-300">|</span>
-                                    )}
-                                    <label
-                                      className={`relative cursor-pointer px-2 py-1 text-white rounded transition-colors flex items-center gap-1 text-xs ${record.signedAgreementDoc ? "bg-blue-600 hover:bg-blue-700" : "bg-green-600 hover:bg-green-700"}`}
-                                    >
-                                      {uploadingDoc?.recordId === record.id &&
-                                      uploadingDoc?.field ===
-                                        "signedAgreementDoc" ? (
-                                        <span className="flex items-center gap-1">
-                                          <div className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
-                                          Uploading...
-                                        </span>
-                                      ) : (
-                                        <span className="flex items-center gap-1">
-                                          <FiUpload />
-                                          {record.signedAgreementDoc
-                                            ? "Replace"
-                                            : "Upload"}
-                                        </span>
-                                      )}
-                                      <input
-                                        type="file"
-                                        accept=".pdf,.doc,.docx,image/*"
-                                        onChange={(e) => {
-                                          const file = e.target.files?.[0];
-                                          if (file) {
-                                            handleFileUpload(
-                                              record.id,
-                                              "signedAgreementDoc",
-                                              file,
-                                            );
-                                          }
-                                          e.target.value = "";
-                                        }}
-                                        disabled={
-                                          uploadingDoc?.recordId ===
-                                            record.id &&
-                                          uploadingDoc?.field ===
-                                            "signedAgreementDoc"
-                                        }
-                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                        onClick={(e) => e.stopPropagation()}
-                                      />
-                                    </label>
-                                  </>
-                                )}
-                                {!record.signedAgreementDoc &&
-                                  user?.role !== "admin" &&
-                                  "-"}
-                              </div>
-                            </td>
-                            <td>
-                              <div className="flex gap-1">
-                                {isEditable && (
-                                  <>
-                                    <button
-                                      onClick={() => handleEdit(record)}
-                                      className="text-xs text-blue-600 hover:text-blue-800"
-                                    >
-                                      Form
-                                    </button>
-                                    <span className="text-[#d1d5db]">|</span>
-                                  </>
-                                )}
-                                <button
-                                  onClick={() => setViewingRecord(record)}
-                                  className="text-xs text-blue-600 hover:text-blue-800"
-                                >
-                                  View
-                                </button>
-                                {canDelete() && (
-                                  <>
-                                    <span className="text-[#d1d5db]">|</span>
-                                    <button
-                                      onClick={() =>
-                                        handleDeleteRecord(record.id)
-                                      }
-                                      className="text-xs text-red-600 hover:text-red-800"
-                                    >
-                                      Del
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </td>
                             {renderEditableCell(
                               "description",
                               record.description,
@@ -2454,7 +2282,283 @@ function HomePage() {
                               50,
                             )}
                             <td className="text-xs">{record.createdByName}</td>
-                            
+                            {(() => {
+                              const isEditing =
+                                editingCell?.recordId === record.id &&
+                                editingCell?.field === "documentAvailability";
+                              const cellStyle = isEditing
+                                ? {
+                                    padding: 0,
+                                    overflow: "visible" as const,
+                                  }
+                                : {};
+
+                              return (
+                                <td
+                                  className={`text-xs relative ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
+                                  style={{
+                                    ...getStickyPosition(
+                                      "docAvailability",
+                                      user?.role,
+                                      false,
+                                    ),
+                                    zIndex: isEditing ? 50 : 2,
+                                    boxShadow: "-2px 0 4px rgba(0,0,0,0.06)",
+                                    ...cellStyle,
+                                  }}
+                                  onClick={() =>
+                                    isEditable &&
+                                    handleCellClick(
+                                      record,
+                                      "documentAvailability",
+                                    )
+                                  }
+                                  title={
+                                    isEditable && !isEditing
+                                      ? "Click to edit"
+                                      : ""
+                                  }
+                                >
+                                  {isEditing ? (
+                                    <CellDropdown
+                                      options={[
+                                        {
+                                          value: "Available",
+                                          label: "Available",
+                                        },
+                                        {
+                                          value: "Not Available",
+                                          label: "Not Available",
+                                        },
+                                      ]}
+                                      value={
+                                        inlineEditData.documentAvailability ||
+                                        record.documentAvailability ||
+                                        "Not Available"
+                                      }
+                                      onChange={(value) =>
+                                        saveFieldDirectly(
+                                          "documentAvailability",
+                                          value,
+                                        )
+                                      }
+                                      onClose={cancelInlineEdit}
+                                      placeholder="Not Available"
+                                    />
+                                  ) : (
+                                    <span className="flex items-center justify-between gap-1">
+                                      <span>
+                                        {record.documentAvailability ||
+                                          "Not Available"}
+                                      </span>
+                                      <FiChevronDown
+                                        className="text-blue-600"
+                                        size={14}
+                                      />
+                                    </span>
+                                  )}
+                                </td>
+                              );
+                            })()}
+                            <td
+                              className="text-xs text-center"
+                              style={{
+                                ...getStickyPosition(
+                                  "hodApproval",
+                                  user?.role,
+                                  false,
+                                ),
+                              }}
+                            >
+                              <div className="flex gap-1 items-center justify-center">
+                                {record.hodApprovalDoc && (
+                                  <button
+                                    onClick={() =>
+                                      setViewingDocument({
+                                        url: record.hodApprovalDoc!,
+                                        title: `HO Approval - ${record.companyName}`,
+                                      })
+                                    }
+                                    className="text-blue-600 hover:underline cursor-pointer text-xs"
+                                  >
+                                    View
+                                  </button>
+                                )}
+                                {user?.role === "admin" && (
+                                  <>
+                                    {record.hodApprovalDoc && (
+                                      <span className="text-gray-300">|</span>
+                                    )}
+                                    <label
+                                      className={`relative cursor-pointer px-2 py-1 text-white rounded transition-colors flex items-center gap-1 text-xs ${record.hodApprovalDoc ? "bg-blue-600 hover:bg-blue-700" : "bg-green-600 hover:bg-green-700"}`}
+                                    >
+                                      {uploadingDoc?.recordId === record.id &&
+                                      uploadingDoc?.field ===
+                                        "hodApprovalDoc" ? (
+                                        <span className="flex items-center gap-1">
+                                          <div className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
+                                          Uploading...
+                                        </span>
+                                      ) : (
+                                        <span className="flex items-center gap-1">
+                                          <FiUpload />
+                                          {record.hodApprovalDoc
+                                            ? "Replace"
+                                            : "Upload"}
+                                        </span>
+                                      )}
+                                      <input
+                                        type="file"
+                                        accept=".pdf,.doc,.docx,image/*"
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) {
+                                            handleFileUpload(
+                                              record.id,
+                                              "hodApprovalDoc",
+                                              file,
+                                            );
+                                          }
+                                          e.target.value = "";
+                                        }}
+                                        disabled={
+                                          uploadingDoc?.recordId ===
+                                            record.id &&
+                                          uploadingDoc?.field ===
+                                            "hodApprovalDoc"
+                                        }
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                    </label>
+                                  </>
+                                )}
+                                {!record.hodApprovalDoc &&
+                                  user?.role !== "admin" &&
+                                  "-"}
+                              </div>
+                            </td>
+                            <td
+                              className="text-xs text-center"
+                              style={{
+                                ...getStickyPosition(
+                                  "signedAgreement",
+                                  user?.role,
+                                  false,
+                                ),
+                                boxShadow: "-2px 0 4px rgba(0,0,0,0.04)",
+                              }}
+                            >
+                              <div className="flex gap-1 items-center justify-center">
+                                {record.signedAgreementDoc && (
+                                  <button
+                                    onClick={() =>
+                                      setViewingDocument({
+                                        url: record.signedAgreementDoc!,
+                                        title: `Signed Agreement - ${record.companyName}`,
+                                      })
+                                    }
+                                    className="text-blue-600 hover:underline cursor-pointer text-xs"
+                                  >
+                                    View
+                                  </button>
+                                )}
+                                {user?.role === "admin" && (
+                                  <>
+                                    {record.signedAgreementDoc && (
+                                      <span className="text-gray-300">|</span>
+                                    )}
+                                    <label
+                                      className={`relative cursor-pointer px-2 py-1 text-white rounded transition-colors flex items-center gap-1 text-xs ${record.signedAgreementDoc ? "bg-blue-600 hover:bg-blue-700" : "bg-green-600 hover:bg-green-700"}`}
+                                    >
+                                      {uploadingDoc?.recordId === record.id &&
+                                      uploadingDoc?.field ===
+                                        "signedAgreementDoc" ? (
+                                        <span className="flex items-center gap-1">
+                                          <div className="animate-spin h-3 w-3 border-2 border-white border-t-transparent rounded-full"></div>
+                                          Uploading...
+                                        </span>
+                                      ) : (
+                                        <span className="flex items-center gap-1">
+                                          <FiUpload />
+                                          {record.signedAgreementDoc
+                                            ? "Replace"
+                                            : "Upload"}
+                                        </span>
+                                      )}
+                                      <input
+                                        type="file"
+                                        accept=".pdf,.doc,.docx,image/*"
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) {
+                                            handleFileUpload(
+                                              record.id,
+                                              "signedAgreementDoc",
+                                              file,
+                                            );
+                                          }
+                                          e.target.value = "";
+                                        }}
+                                        disabled={
+                                          uploadingDoc?.recordId ===
+                                            record.id &&
+                                          uploadingDoc?.field ===
+                                            "signedAgreementDoc"
+                                        }
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                    </label>
+                                  </>
+                                )}
+                                {!record.signedAgreementDoc &&
+                                  user?.role !== "admin" &&
+                                  "-"}
+                              </div>
+                            </td>
+                            <td
+                              style={{
+                                ...getStickyPosition(
+                                  "actions",
+                                  user?.role,
+                                  false,
+                                ),
+                              }}
+                            >
+                              <div className="flex gap-1">
+                                {isEditable && (
+                                  <>
+                                    <button
+                                      onClick={() => handleEdit(record)}
+                                      className="text-xs text-blue-600 hover:text-blue-800"
+                                    >
+                                      Form
+                                    </button>
+                                    <span className="text-[#d1d5db]">|</span>
+                                  </>
+                                )}
+                                <button
+                                  onClick={() => setViewingRecord(record)}
+                                  className="text-xs text-blue-600 hover:text-blue-800"
+                                >
+                                  View
+                                </button>
+                                {canDelete() && (
+                                  <>
+                                    <span className="text-[#d1d5db]">|</span>
+                                    <button
+                                      onClick={() =>
+                                        handleDeleteRecord(record.id)
+                                      }
+                                      className="text-xs text-red-600 hover:text-red-800"
+                                    >
+                                      Del
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
                           </tr>
                         );
                       })}

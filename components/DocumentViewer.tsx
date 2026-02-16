@@ -17,6 +17,26 @@ export default function DocumentViewer({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
+  // Handle undefined or null URLs
+  if (!url) {
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-2xl p-6 max-w-md">
+          <h2 className="text-lg font-semibold text-red-600 mb-2">Error</h2>
+          <p className="text-gray-600 mb-4">
+            Document URL is missing or invalid.
+          </p>
+          <button
+            onClick={onClose}
+            className="w-full bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // For unsigned Cloudinary uploads, the URL is already publicly accessible
   // No need to fetch signed URLs
   const viewableUrl = url;

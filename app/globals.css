@@ -119,8 +119,9 @@ textarea:disabled {
 /* Custom Scrollbar */
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
+  cursor: alias;
 }
 
 ::-webkit-scrollbar-track {
@@ -128,7 +129,7 @@ textarea:disabled {
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: #d1d5db;
+  background-color: #000000;
   border-radius: 4px;
 }
 
