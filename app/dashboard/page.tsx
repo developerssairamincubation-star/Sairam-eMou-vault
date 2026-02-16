@@ -435,10 +435,12 @@ export default function Dashboard() {
     monthRangeEnd,
   );
 
-  // Get available years from records
+  // Get available years from approved records only
   const availableYears = useMemo(() => {
     const years = new Set<number>();
-    records.forEach((record) => {
+    const currentYear = new Date().getFullYear();
+    years.add(currentYear); // Always include current year
+    approvedRecords.forEach((record) => {
       if (record.fromDate) {
         const parts = record.fromDate.split(".");
         if (parts.length === 3) {
@@ -448,7 +450,7 @@ export default function Dashboard() {
       }
     });
     return Array.from(years).sort((a, b) => b - a); // Descending order
-  }, [records]);
+  }, [approvedRecords]);
 
   // Helper function to show filtered records in popup
   const showRecords = (
