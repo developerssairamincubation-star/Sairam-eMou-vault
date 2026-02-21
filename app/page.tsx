@@ -341,7 +341,7 @@ function HomePage() {
       // Filter for records with documents
       if (selectedStatus === "With Docs") {
         data = data.filter(
-          (record) => record.hodApprovalDoc || record.signedAgreementDoc,
+          (record) => record.documentAvailability === "Available",
         );
       }
 
