@@ -851,13 +851,13 @@ function AdminPage() {
     const getStickyRight = (position: "doc" | "ho" | "signed") => {
       if (section === "pending") {
         // Pending section positions (modifiable)
-        return { doc: 410, ho: 313, signed: 216 }[position];
+        return { doc: 570, ho: 390, signed: 216 }[position];
       } else if (section === "draft") {
         // Draft section positions (keep original)
-        return { doc: 369, ho: 268, signed: 167 }[position];
+        return { doc: 525, ho: 346, signed: 167 }[position];
       } else {
-        // Approved section positions (keep original)
-        return { doc: 508, ho: 329, signed: 150 }[position];
+        // Approved section positions (updated for 3-button actions column)
+        return { doc: 592, ho: 413, signed: 234 }[position];
       }
     };
     // Helper function to get field type icon
@@ -1120,7 +1120,7 @@ function AdminPage() {
                 </th>
                 <th
                   style={{
-                    width: showApprovalActions ? "200px" : "100px",
+                    width: showApprovalActions ? "200px" : "250px",
                     position: "sticky",
                     right: 0,
                     zIndex: 12,
@@ -1708,6 +1708,13 @@ function AdminPage() {
                               title="View full record details"
                             >
                               View Details
+                            </button>
+                            <button
+                              onClick={() => handleMoveToPending(record.id)}
+                              className="px-2 py-1 text-[10px] font-medium bg-orange-600 hover:bg-orange-700 text-white rounded transition-colors flex items-center gap-1"
+                              title="Revert to pending approval"
+                            >
+                              <FiClock /> To Pending
                             </button>
                             <button
                               onClick={() => handleDeleteRecord(record.id)}
