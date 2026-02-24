@@ -517,6 +517,20 @@ function AdminPage() {
     }
   };
 
+  const handleMoveToDraft = async (recordId: string) => {
+    try {
+      await updateEMoU(recordId, { approvalStatus: "draft" });
+      setAlert({
+        message: "Record reverted to draft!",
+        type: "success",
+      });
+      await loadApprovalRecords();
+    } catch (error) {
+      console.error("Failed to revert record:", error);
+      setAlert({ message: "Failed to revert record to draft", type: "error" });
+    }
+  };
+
   const handleDeleteRecord = async (recordId: string) => {
     const record = approvedRecords.find((r) => r.id === recordId);
     setConfirmDialog({
@@ -837,13 +851,13 @@ function AdminPage() {
     const getStickyRight = (position: "doc" | "ho" | "signed") => {
       if (section === "pending") {
         // Pending section positions (modifiable)
-        return { doc: 384, ho: 253, signed: 140 }[position];
+        return { doc: 570, ho: 390, signed: 216 }[position];
       } else if (section === "draft") {
         // Draft section positions (keep original)
-        return { doc: 339, ho: 253, signed: 167 }[position];
+        return { doc: 525, ho: 346, signed: 167 }[position];
       } else {
-        // Approved section positions (keep original)
-        return { doc: 363, ho: 277, signed: 150 }[position];
+        // Approved section positions (updated for 3-button actions column)
+        return { doc: 592, ho: 413, signed: 234 }[position];
       }
     };
     // Helper function to get field type icon
@@ -1106,7 +1120,7 @@ function AdminPage() {
                 </th>
                 <th
                   style={{
-                    width: showApprovalActions ? "200px" : "100px",
+                    width: showApprovalActions ? "200px" : "250px",
                     position: "sticky",
                     right: 0,
                     zIndex: 12,
@@ -1510,6 +1524,7 @@ function AdminPage() {
                         right: getStickyRight("ho"),
                         zIndex: 2,
                         background: "#fff",
+                        minWidth: "180px",
                       }}
                     >
                       <div className="flex gap-1 items-center justify-center">
@@ -1579,6 +1594,7 @@ function AdminPage() {
                         zIndex: 2,
                         background: "#fff",
                         boxShadow: "-2px 0 4px rgba(0,0,0,0.04)",
+                        minWidth: "180px",
                       }}
                     >
                       <div className="flex gap-1 items-center justify-center">
@@ -1668,12 +1684,20 @@ function AdminPage() {
                               </button>
                             )}
                             {record.approvalStatus === "pending" && (
-                              <button
-                                onClick={() => handleRejectRecord(record.id)}
-                                className="px-2 py-1 text-[10px] font-medium bg-red-600 hover:bg-red-700 text-white rounded transition-colors flex items-center gap-1"
-                              >
-                                <FiX /> Reject
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleMoveToDraft(record.id)}
+                                  className="px-2 py-1 text-[10px] font-medium bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors flex items-center gap-1"
+                                >
+                                  <FiArrowLeft /> To Draft
+                                </button>
+                                <button
+                                  onClick={() => handleRejectRecord(record.id)}
+                                  className="px-2 py-1 text-[10px] font-medium bg-red-600 hover:bg-red-700 text-white rounded transition-colors flex items-center gap-1"
+                                >
+                                  <FiX /> Reject
+                                </button>
+                              </>
                             )}
                           </>
                         ) : (
@@ -1684,6 +1708,13 @@ function AdminPage() {
                               title="View full record details"
                             >
                               View Details
+                            </button>
+                            <button
+                              onClick={() => handleMoveToPending(record.id)}
+                              className="px-2 py-1 text-[10px] font-medium bg-orange-600 hover:bg-orange-700 text-white rounded transition-colors flex items-center gap-1"
+                              title="Revert to pending approval"
+                            >
+                              <FiClock /> To Pending
                             </button>
                             <button
                               onClick={() => handleDeleteRecord(record.id)}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   EMoURecord,
   DepartmentCode,
@@ -98,6 +98,7 @@ export default function EMoUForm({
 }: EMoUFormProps) {
   const { user, firebaseUser } = useAuth();
   const [loading, setLoading] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [uploadingHOD, setUploadingHOD] = useState(false);
   const [uploadingAgreement, setUploadingAgreement] = useState(false);
   const [showAlert, setShowAlert] = useState<{
@@ -327,6 +328,10 @@ export default function EMoUForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Prevent duplicate submissions
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setLoading(true);
 
     try {
@@ -354,6 +359,7 @@ export default function EMoUForm({
       setShowAlert({ message: "Failed to save record", type: "error" });
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 

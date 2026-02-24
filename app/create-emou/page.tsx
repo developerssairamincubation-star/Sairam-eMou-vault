@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import EMoUForm from "@/components/EMoUForm";
@@ -16,8 +16,12 @@ export default function CreateEMoUPage() {
     message: string;
     type: "success" | "error" | "info" | "warning";
   } | null>(null);
+  const isCreatingRef = useRef(false);
 
   const handleCreateRecord = async (data: Partial<EMoURecord>) => {
+    // Prevent duplicate record creation
+    if (isCreatingRef.current) return;
+    isCreatingRef.current = true;
     if (!user) {
       console.error("No user available");
       setAlert({ message: "Please log in to create records", type: "error" });
@@ -64,6 +68,7 @@ export default function CreateEMoUPage() {
         message: "Failed to create record. Check console for details.",
         type: "error",
       });
+      isCreatingRef.current = false;
     }
   };
 

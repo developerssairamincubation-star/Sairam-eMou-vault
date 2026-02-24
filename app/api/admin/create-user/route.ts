@@ -65,6 +65,15 @@ function generateStrongPassword(role: string, department?: string): string {
   return `${prefix}${randomPart}`;
 }
 
+// Parse notify emails from env
+function getNotifyEmails(): string[] {
+  const raw = process.env.NOTIFY_EMAILS || "";
+  return raw
+    .split(",")
+    .map((e) => e.trim())
+    .filter(Boolean);
+}
+
 // Send welcome email with credentials
 async function sendWelcomeEmail(
   email: string,
@@ -73,10 +82,12 @@ async function sendWelcomeEmail(
   verificationLink: string
 ) {
   const loginUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const notifyEmails = getNotifyEmails();
   
   const mailOptions = {
     from: `"Sairam eMoU System" <${process.env.EMAIL_USER}>`,
     to: email,
+    cc: notifyEmails.length > 0 ? notifyEmails.join(", ") : undefined,
     subject: "Account Created - Sairam eMoU System",
     html: `
       <!DOCTYPE html>
@@ -185,6 +196,36 @@ If you have any questions, please contact the system administrator.
   };
 
   await transporter.sendMail(mailOptions);
+
+  // Send a separate admin notification to notify emails
+  if (notifyEmails.length > 0) {
+    const adminNotification = {
+      from: `"Sairam eMoU System" <${process.env.EMAIL_USER}>`,
+      to: notifyEmails.join(", "),
+      subject: `[Admin Notice] New User Created - ${displayName}`,
+      html: `
+        <div style="font-family: 'Gabarito', Arial, sans-serif; max-width: 560px; margin: 0 auto; background: white; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+          <div style="background: #1f2937; color: white; padding: 16px 24px; border-bottom: 3px solid #2563eb;">
+            <h2 style="margin: 0; font-size: 16px;">New User Created</h2>
+          </div>
+          <div style="padding: 20px 24px; font-size: 14px; color: #374151;">
+            <p style="margin: 0 0 12px;">A new user account has been created in the eMoU system:</p>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr><td style="padding: 6px 0; color: #6b7280;">Name</td><td style="padding: 6px 0; font-weight: 600;">${displayName}</td></tr>
+              <tr><td style="padding: 6px 0; color: #6b7280;">Email</td><td style="padding: 6px 0;">${email}</td></tr>
+              <tr><td style="padding: 6px 0; color: #6b7280;">Created At</td><td style="padding: 6px 0;">${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}</td></tr>
+            </table>
+          </div>
+          <div style="background: #f9fafb; padding: 12px 24px; font-size: 11px; color: #9ca3af; text-align: center; border-top: 1px solid #e5e7eb;">
+            This is an automated notification from Sairam eMoU System.
+          </div>
+        </div>
+      `,
+      text: `New User Created\n\nName: ${displayName}\nEmail: ${email}\nCreated At: ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}\n\nThis is an automated notification from Sairam eMoU System.`,
+    };
+
+    await transporter.sendMail(adminNotification);
+  }
 }
 
 export async function POST(request: NextRequest) {
