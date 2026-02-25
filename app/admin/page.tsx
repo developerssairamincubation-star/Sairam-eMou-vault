@@ -754,7 +754,9 @@ function AdminPage() {
             throw new Error(data.error || "Failed to delete user");
           }
 
-          await loadUsers();
+          // Remove user from local state immediately (don't rely on re-fetch which may hit cache)
+          setUsers((prev) => prev.filter((u) => u.uid !== uid));
+          setDeletingUserId(null);
           setAlert({ message: "User deleted successfully!", type: "success" });
         } catch (error) {
           const err = error as Error;
@@ -2374,8 +2376,8 @@ function AdminPage() {
                               {user.createdAt.toLocaleDateString()}
                             </td>
                             <td>
-                              {user.uid !== currentUser?.uid && (
-                                deletingUserId === user.uid ? (
+                              {user.uid !== currentUser?.uid &&
+                                (deletingUserId === user.uid ? (
                                   <div className="flex items-center gap-1 text-xs text-red-500">
                                     <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-red-300 border-t-red-600"></div>
                                     <span>Deleting…</span>
@@ -2388,8 +2390,7 @@ function AdminPage() {
                                   >
                                     Delete
                                   </button>
-                                )
-                              )}
+                                ))}
                             </td>
                           </tr>
                         ))
