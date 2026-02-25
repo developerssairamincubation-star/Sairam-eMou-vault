@@ -246,7 +246,9 @@ export default function ViewRecordDialog({
               {/* Academic Details */}
               {(record.skillsTechnologies ||
                 record.clubsAligned ||
-                record.sdgGoals) && (
+                record.sdgGoals ||
+                record.ieeeSociety ||
+                record.emouOutcome) && (
                 <div className="bg-white rounded-lg p-5 border border-gray-200 shadow-sm">
                   <h3 className="text-xs font-semibold text-gray-600 mb-3 uppercase tracking-wider">
                     Academic & Learning
@@ -276,6 +278,32 @@ export default function ViewRecordDialog({
                           SDG Goals
                         </span>
                         <p className="text-gray-700">{record.sdgGoals}</p>
+                      </div>
+                    )}
+                    {record.ieeeSociety &&
+                      record.ieeeSociety !== "Not Applicable" && (
+                        <div>
+                          <span className="text-xs font-medium text-gray-500 block mb-1">
+                            IEEE Society
+                          </span>
+                          <p className="text-gray-700">{record.ieeeSociety}</p>
+                        </div>
+                      )}
+                    {record.emouOutcome && (
+                      <div>
+                        <span className="text-xs font-medium text-gray-500 block mb-1">
+                          EMoU Outcome
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {record.emouOutcome.split(",").map((outcome, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-block px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-700 border border-blue-200"
+                            >
+                              {outcome.trim()}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>

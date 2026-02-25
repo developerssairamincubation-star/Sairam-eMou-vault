@@ -83,6 +83,8 @@ export default function RecordDetailPopup({
       "Internship Opportunities": record.internshipOpportunity || 0,
       "Going For Renewal": record.goingForRenewal || "No",
       "Benefits Achieved": record.benefitsAchieved || "",
+      "IEEE Society": record.ieeeSociety || "",
+      "EMoU Outcome": record.emouOutcome || "",
       "Document Availability": record.documentAvailability || "Not Available",
       "Created By": record.createdByName || "",
       "Created At":

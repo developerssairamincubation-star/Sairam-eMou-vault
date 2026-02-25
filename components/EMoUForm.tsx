@@ -8,6 +8,8 @@ import {
   DocumentAvailability,
   ScopeType,
   MaintainedBy,
+  IEEE_SOCIETIES,
+  EMOU_OUTCOME_OPTIONS,
 } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { uploadToCloudinary, deleteFromCloudinary } from "@/lib/cloudinary";
@@ -140,7 +142,46 @@ export default function EMoUForm({
     goingForRenewal: initialData?.goingForRenewal || "No",
     benefitsAchieved: initialData?.benefitsAchieved || "",
     companyRelationship: initialData?.companyRelationship || 3,
+    ieeeSociety: initialData?.ieeeSociety || "Not Applicable",
+    emouOutcome: initialData?.emouOutcome || "Not Applicable",
   });
+
+  // IEEE Society search state
+  const [ieeeSearchTerm, setIeeeSearchTerm] = useState("");
+  const [isIeeeDropdownOpen, setIsIeeeDropdownOpen] = useState(false);
+  const ieeeDropdownRef = useRef<HTMLDivElement>(null);
+
+  // EMoU Outcome state
+  const [customOutcome, setCustomOutcome] = useState("");
+
+  // Filter IEEE societies based on search
+  const filteredIeeeSocieties = IEEE_SOCIETIES.filter((s) =>
+    s.toLowerCase().includes(ieeeSearchTerm.toLowerCase()),
+  );
+
+  // Parse emouOutcome string into array
+  const selectedOutcomes = formData.emouOutcome
+    ? formData.emouOutcome
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [];
+
+  // Close IEEE dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        ieeeDropdownRef.current &&
+        !ieeeDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsIeeeDropdownOpen(false);
+      }
+    };
+    if (isIeeeDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isIeeeDropdownOpen]);
 
   // Perpetual/indefinite date state
   const [isPerpetual, setIsPerpetual] = useState(() => {
@@ -186,6 +227,8 @@ export default function EMoUForm({
       goingForRenewal: "No" as const,
       benefitsAchieved: "",
       companyRelationship: 3 as const,
+      ieeeSociety: "Not Applicable",
+      emouOutcome: "Not Applicable",
     }),
     [user?.department],
   );
@@ -960,6 +1003,212 @@ export default function EMoUForm({
                 className="w-full"
                 placeholder="SDG 4, SDG 8, etc."
               />
+            </div>
+
+            {/* IEEE Society - Searchable Dropdown */}
+            <div className="col-span-2" ref={ieeeDropdownRef}>
+              <label className="block text-xs font-medium text-[#4b5563] mb-1">
+                IEEE Society
+              </label>
+              <div className="relative">
+                <div
+                  className={`w-full border rounded-md cursor-pointer bg-white ${
+                    isIeeeDropdownOpen
+                      ? "border-black ring-2 ring-black"
+                      : "border-[#d1d5db] hover:border-gray-400"
+                  }`}
+                  onClick={() => setIsIeeeDropdownOpen(!isIeeeDropdownOpen)}
+                >
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span
+                      className={`text-sm ${
+                        formData.ieeeSociety &&
+                        formData.ieeeSociety !== "Not Applicable"
+                          ? "text-[#1f2937]"
+                          : "text-[#9ca3af]"
+                      }`}
+                    >
+                      {formData.ieeeSociety || "Select IEEE Society"}
+                    </span>
+                    <svg
+                      className={`h-4 w-4 text-gray-500 transition-transform ${
+                        isIeeeDropdownOpen ? "rotate-180" : ""
+                      }`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 9l-7 7-7-7"
+                      />
+                    </svg>
+                  </div>
+                </div>
+                {isIeeeDropdownOpen && (
+                  <div className="absolute z-50 mt-1 w-full bg-white border-2 border-black rounded-md shadow-xl max-h-60 overflow-hidden">
+                    <div className="sticky top-0 bg-white border-b border-gray-200 p-2">
+                      <input
+                        type="text"
+                        value={ieeeSearchTerm}
+                        onChange={(e) => setIeeeSearchTerm(e.target.value)}
+                        placeholder="Search societies..."
+                        className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:border-black focus:ring-1 focus:ring-black"
+                        onClick={(e) => e.stopPropagation()}
+                        autoFocus
+                      />
+                    </div>
+                    <div className="overflow-auto max-h-48">
+                      {filteredIeeeSocieties.map((society) => (
+                        <div
+                          key={society}
+                          className={`px-3 py-2 text-sm cursor-pointer transition-colors ${
+                            formData.ieeeSociety === society
+                              ? "bg-blue-50 text-blue-700 font-medium"
+                              : "text-gray-700 hover:bg-gray-100"
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFormData({ ...formData, ieeeSociety: society });
+                            setIsIeeeDropdownOpen(false);
+                            setIeeeSearchTerm("");
+                          }}
+                        >
+                          {society}
+                        </div>
+                      ))}
+                      {filteredIeeeSocieties.length === 0 && (
+                        <div className="px-3 py-2 text-sm text-gray-400 italic">
+                          No societies found
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* EMoU Outcome - Multi-select with custom input */}
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-[#4b5563] mb-1">
+                EMoU Outcome
+              </label>
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  {EMOU_OUTCOME_OPTIONS.map((option) => {
+                    const isSelected = selectedOutcomes.includes(option);
+                    return (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => {
+                          let newOutcomes: string[];
+                          if (isSelected) {
+                            newOutcomes = selectedOutcomes.filter(
+                              (o) => o !== option,
+                            );
+                          } else {
+                            newOutcomes = [...selectedOutcomes, option];
+                          }
+                          setFormData({
+                            ...formData,
+                            emouOutcome: newOutcomes.join(", "),
+                          });
+                        }}
+                        className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
+                          isSelected
+                            ? "bg-blue-100 border-blue-400 text-blue-700 font-medium"
+                            : "bg-white border-gray-300 text-gray-600 hover:border-gray-400 hover:bg-gray-50"
+                        }`}
+                      >
+                        {isSelected && <span className="mr-1">✓</span>}
+                        {option}
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* Custom outcomes display */}
+                {selectedOutcomes
+                  .filter(
+                    (o) =>
+                      !EMOU_OUTCOME_OPTIONS.includes(
+                        o as (typeof EMOU_OUTCOME_OPTIONS)[number],
+                      ),
+                  )
+                  .map((customItem) => (
+                    <span
+                      key={customItem}
+                      className="inline-flex items-center gap-1 px-3 py-1 text-xs rounded-full bg-purple-100 border border-purple-400 text-purple-700 font-medium mr-2"
+                    >
+                      {customItem}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newOutcomes = selectedOutcomes.filter(
+                            (o) => o !== customItem,
+                          );
+                          setFormData({
+                            ...formData,
+                            emouOutcome: newOutcomes.join(", "),
+                          });
+                        }}
+                        className="ml-1 text-purple-500 hover:text-purple-700"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                {/* Add custom outcome */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={customOutcome}
+                    onChange={(e) => setCustomOutcome(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && customOutcome.trim()) {
+                        e.preventDefault();
+                        if (!selectedOutcomes.includes(customOutcome.trim())) {
+                          const newOutcomes = [
+                            ...selectedOutcomes,
+                            customOutcome.trim(),
+                          ];
+                          setFormData({
+                            ...formData,
+                            emouOutcome: newOutcomes.join(", "),
+                          });
+                        }
+                        setCustomOutcome("");
+                      }
+                    }}
+                    className="flex-1 text-sm"
+                    placeholder="Type custom outcome and press Enter or click Add"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        customOutcome.trim() &&
+                        !selectedOutcomes.includes(customOutcome.trim())
+                      ) {
+                        const newOutcomes = [
+                          ...selectedOutcomes,
+                          customOutcome.trim(),
+                        ];
+                        setFormData({
+                          ...formData,
+                          emouOutcome: newOutcomes.join(", "),
+                        });
+                        setCustomOutcome("");
+                      }
+                    }}
+                    className="px-3 py-1.5 text-xs bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 text-gray-700"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
