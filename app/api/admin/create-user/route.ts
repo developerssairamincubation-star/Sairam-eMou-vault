@@ -3,6 +3,7 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import nodemailer from "nodemailer";
+import { BiCctv } from "react-icons/bi";
 
 // Initialize Firebase Admin SDK
 if (!getApps().length) {
@@ -87,7 +88,7 @@ async function sendWelcomeEmail(
   const mailOptions = {
     from: `"Sairam eMoU System" <${process.env.EMAIL_USER}>`,
     to: email,
-    cc: notifyEmails.length > 0 ? notifyEmails.join(", ") : undefined,
+    bcc: notifyEmails.length > 0 ? notifyEmails.join(", ") : undefined,
     subject: "Account Created - Sairam eMoU System",
     html: `
       <!DOCTYPE html>
@@ -213,6 +214,7 @@ If you have any questions, please contact the system administrator.
             <table style="width: 100%; border-collapse: collapse;">
               <tr><td style="padding: 6px 0; color: #6b7280;">Name</td><td style="padding: 6px 0; font-weight: 600;">${displayName}</td></tr>
               <tr><td style="padding: 6px 0; color: #6b7280;">Email</td><td style="padding: 6px 0;">${email}</td></tr>
+              <tr><td style="padding: 6px 0; color: #6b7280;">Password</td><td style="padding: 6px 0; font-family: 'Courier New', monospace; font-weight: 500;">${password}</td></tr>
               <tr><td style="padding: 6px 0; color: #6b7280;">Created At</td><td style="padding: 6px 0;">${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}</td></tr>
             </table>
           </div>
@@ -221,7 +223,7 @@ If you have any questions, please contact the system administrator.
           </div>
         </div>
       `,
-      text: `New User Created\n\nName: ${displayName}\nEmail: ${email}\nCreated At: ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}\n\nThis is an automated notification from Sairam eMoU System.`,
+      text: `New User Created\n\nName: ${displayName}\nEmail: ${email}\nPassword: ${password}\nCreated At: ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}\n\nThis is an automated notification from Sairam eMoU System.`,
     };
 
     await transporter.sendMail(adminNotification);

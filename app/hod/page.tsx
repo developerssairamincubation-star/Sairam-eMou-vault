@@ -5,8 +5,17 @@ import { useAuth } from "@/context/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Alert from "@/components/Alert";
 import DocumentViewer from "@/components/DocumentViewer";
-import { CellDropdown } from "@/components/CustomDropdown";
-import { EMoURecord } from "@/types";
+import {
+  CellDropdown,
+  SearchableCellDropdown,
+  MultiSelectCellDropdown,
+} from "@/components/CustomDropdown";
+import {
+  EMoURecord,
+  IEEE_SOCIETIES,
+  EMOU_OUTCOME_OPTIONS,
+  DOMAIN_OPTIONS,
+} from "@/types";
 import { getEMoUs, updateEMoU } from "@/lib/firestore";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { useRouter } from "next/navigation";
@@ -613,6 +622,9 @@ function HODPage() {
               <th style={{ width: "90px" }}>Internship</th>
               <th style={{ width: "80px" }}>Renewal</th>
               <th style={{ minWidth: "200px" }}>Benefits Achieved</th>
+              <th style={{ minWidth: "200px" }}>IEEE Society</th>
+              <th style={{ minWidth: "220px" }}>EMoU Outcome</th>
+              <th style={{ minWidth: "220px" }}>Domain</th>
               <th
                 style={{
                   width: "180px",
@@ -1372,6 +1384,212 @@ function HODPage() {
                     "text-xs",
                     50,
                   )}
+                  {/* IEEE Society - Searchable Dropdown */}
+                  {(() => {
+                    const isEditing =
+                      editingCell?.recordId === record.id &&
+                      editingCell?.field === "ieeeSociety";
+                    const cellStyle = isEditing
+                      ? { padding: 0, overflow: "visible" as const }
+                      : {};
+                    const isEditable = canEdit(
+                      record.createdBy,
+                      record.department,
+                    );
+                    return (
+                      <td
+                        className={`text-xs relative ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
+                        onClick={() =>
+                          isEditable &&
+                          !isEditing &&
+                          handleCellClick(record, "ieeeSociety")
+                        }
+                        style={cellStyle}
+                        title={
+                          isEditable && !isEditing ? "Click to select" : ""
+                        }
+                      >
+                        {isEditing ? (
+                          <SearchableCellDropdown
+                            options={IEEE_SOCIETIES.map((s) => ({
+                              value: s,
+                              label: s,
+                            }))}
+                            value={
+                              (inlineEditData.ieeeSociety as string) ||
+                              record.ieeeSociety ||
+                              "Not Applicable"
+                            }
+                            onChange={(value) =>
+                              saveFieldDirectly("ieeeSociety", value)
+                            }
+                            onClose={cancelInlineEdit}
+                            placeholder="IEEE Society"
+                          />
+                        ) : (
+                          <span className="flex items-center justify-between gap-1 px-1">
+                            <span
+                              className="truncate"
+                              title={record.ieeeSociety || "Not Applicable"}
+                            >
+                              {(() => {
+                                const val =
+                                  record.ieeeSociety || "Not Applicable";
+                                return val.length > 30
+                                  ? val.substring(0, 30) + "..."
+                                  : val;
+                              })()}
+                            </span>
+                            {isEditable && (
+                              <FiChevronDown
+                                className="text-blue-600 flex-shrink-0"
+                                size={14}
+                              />
+                            )}
+                          </span>
+                        )}
+                      </td>
+                    );
+                  })()}
+                  {/* EMoU Outcome - Multi-Select Dropdown */}
+                  {(() => {
+                    const isEditing =
+                      editingCell?.recordId === record.id &&
+                      editingCell?.field === "emouOutcome";
+                    const cellStyle = isEditing
+                      ? { padding: 0, overflow: "visible" as const }
+                      : {};
+                    const isEditable = canEdit(
+                      record.createdBy,
+                      record.department,
+                    );
+                    return (
+                      <td
+                        className={`text-xs relative ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
+                        onClick={() =>
+                          isEditable &&
+                          !isEditing &&
+                          handleCellClick(record, "emouOutcome")
+                        }
+                        style={cellStyle}
+                        title={
+                          isEditable && !isEditing ? "Click to select" : ""
+                        }
+                      >
+                        {isEditing ? (
+                          <MultiSelectCellDropdown
+                            predefinedOptions={[...EMOU_OUTCOME_OPTIONS]}
+                            value={
+                              (inlineEditData.emouOutcome as string) ||
+                              record.emouOutcome ||
+                              "Not Applicable"
+                            }
+                            onChange={(value) => {
+                              setInlineEditData((prev) => ({
+                                ...prev,
+                                emouOutcome: value,
+                              }));
+                            }}
+                            onClose={() => {
+                              const finalValue =
+                                (inlineEditData.emouOutcome as string) ||
+                                record.emouOutcome ||
+                                "Not Applicable";
+                              saveFieldDirectly("emouOutcome", finalValue);
+                            }}
+                            placeholder="EMoU Outcome"
+                          />
+                        ) : (
+                          <span className="flex items-center justify-between gap-1 px-1">
+                            <span
+                              className="truncate"
+                              title={record.emouOutcome || "Not Applicable"}
+                            >
+                              {(() => {
+                                const val =
+                                  record.emouOutcome || "Not Applicable";
+                                return val.length > 40
+                                  ? val.substring(0, 40) + "..."
+                                  : val;
+                              })()}
+                            </span>
+                            {isEditable && (
+                              <FiChevronDown
+                                className="text-blue-600 flex-shrink-0"
+                                size={14}
+                              />
+                            )}
+                          </span>
+                        )}
+                      </td>
+                    );
+                  })()}
+                  {/* Domain - Searchable Dropdown */}
+                  {(() => {
+                    const isEditing =
+                      editingCell?.recordId === record.id &&
+                      editingCell?.field === "domain";
+                    const cellStyle = isEditing
+                      ? { padding: 0, overflow: "visible" as const }
+                      : {};
+                    const isEditable = canEdit(
+                      record.createdBy,
+                      record.department,
+                    );
+                    return (
+                      <td
+                        className={`text-xs relative ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
+                        onClick={() =>
+                          isEditable &&
+                          !isEditing &&
+                          handleCellClick(record, "domain")
+                        }
+                        style={cellStyle}
+                        title={
+                          isEditable && !isEditing ? "Click to select" : ""
+                        }
+                      >
+                        {isEditing ? (
+                          <SearchableCellDropdown
+                            options={DOMAIN_OPTIONS.map((d) => ({
+                              value: d,
+                              label: d,
+                            }))}
+                            value={
+                              (inlineEditData.domain as string) ||
+                              record.domain ||
+                              "Not Applicable"
+                            }
+                            onChange={(value) =>
+                              saveFieldDirectly("domain", value)
+                            }
+                            onClose={cancelInlineEdit}
+                            placeholder="Domain"
+                          />
+                        ) : (
+                          <span className="flex items-center justify-between gap-1 px-1">
+                            <span
+                              className="truncate"
+                              title={record.domain || "Not Applicable"}
+                            >
+                              {(() => {
+                                const val = record.domain || "Not Applicable";
+                                return val.length > 30
+                                  ? val.substring(0, 30) + "..."
+                                  : val;
+                              })()}
+                            </span>
+                            {isEditable && (
+                              <FiChevronDown
+                                className="text-blue-600 flex-shrink-0"
+                                size={14}
+                              />
+                            )}
+                          </span>
+                        )}
+                      </td>
+                    );
+                  })()}
                   <td
                     className="text-xs text-[#6b7280]"
                     style={{

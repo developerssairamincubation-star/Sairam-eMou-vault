@@ -30,10 +30,7 @@ export default function ImportDialog({ onImport, onClose }: ImportDialogProps) {
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const requiredFields = [
-    "companyName",
-    "department",
-  ];
+  const requiredFields = ["companyName", "department"];
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -46,14 +43,16 @@ export default function ImportDialog({ onImport, onClose }: ImportDialogProps) {
   // Intelligent date parser supporting multiple formats
   const parseDate = (dateValue: unknown): string => {
     if (!dateValue) return "";
-    
+
     const dateStr = String(dateValue).trim();
     if (!dateStr) return "";
 
     // Check for perpetual/indefinite dates
-    if (dateStr.toLowerCase().includes("perpetual") || 
-        dateStr.toLowerCase().includes("indefinite") || 
-        dateStr.toLowerCase().includes("infinite")) {
+    if (
+      dateStr.toLowerCase().includes("perpetual") ||
+      dateStr.toLowerCase().includes("indefinite") ||
+      dateStr.toLowerCase().includes("infinite")
+    ) {
       return "Perpetual";
     }
 
@@ -61,8 +60,8 @@ export default function ImportDialog({ onImport, onClose }: ImportDialogProps) {
     if (!isNaN(Number(dateStr)) && Number(dateStr) > 1000) {
       const excelEpoch = new Date(1899, 11, 30);
       const date = new Date(excelEpoch.getTime() + Number(dateStr) * 86400000);
-      const day = String(date.getDate()).padStart(2, '0');
-      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
       const year = date.getFullYear();
       return `${day}.${month}.${year}`;
     }
@@ -78,15 +77,33 @@ export default function ImportDialog({ onImport, onClose }: ImportDialogProps) {
       const match = dateStr.match(pattern);
       if (match) {
         let day: string, month: string, year: string;
-        
-        if (pattern === patterns[1]) { // YYYY-MM-DD
+
+        if (pattern === patterns[1]) {
+          // YYYY-MM-DD
           [, year, month, day] = match;
-        } else if (pattern === patterns[2]) { // DD Month YYYY
+        } else if (pattern === patterns[2]) {
+          // DD Month YYYY
           [, day, month, year] = match;
-          const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-          const monthIndex = monthNames.findIndex(m => month.toLowerCase().startsWith(m));
-          month = String(monthIndex + 1).padStart(2, '0');
-        } else { // DD.MM.YYYY or DD/MM/YY
+          const monthNames = [
+            "jan",
+            "feb",
+            "mar",
+            "apr",
+            "may",
+            "jun",
+            "jul",
+            "aug",
+            "sep",
+            "oct",
+            "nov",
+            "dec",
+          ];
+          const monthIndex = monthNames.findIndex((m) =>
+            month.toLowerCase().startsWith(m),
+          );
+          month = String(monthIndex + 1).padStart(2, "0");
+        } else {
+          // DD.MM.YYYY or DD/MM/YY
           [, day, month, year] = match;
         }
 
@@ -96,9 +113,9 @@ export default function ImportDialog({ onImport, onClose }: ImportDialogProps) {
         }
 
         // Normalize
-        day = String(day).padStart(2, '0');
-        month = String(month).padStart(2, '0');
-        
+        day = String(day).padStart(2, "0");
+        month = String(month).padStart(2, "0");
+
         return `${day}.${month}.${year}`;
       }
     }
@@ -107,8 +124,8 @@ export default function ImportDialog({ onImport, onClose }: ImportDialogProps) {
     try {
       const date = new Date(dateStr);
       if (!isNaN(date.getTime())) {
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, "0");
+        const month = String(date.getMonth() + 1).padStart(2, "0");
         const year = date.getFullYear();
         return `${day}.${month}.${year}`;
       }
@@ -121,16 +138,21 @@ export default function ImportDialog({ onImport, onClose }: ImportDialogProps) {
 
   // Normalize status values (case-insensitive) or auto-determine from dates
   const normalizeStatus = (status: unknown, toDateStr?: string): EMoUStatus => {
-    const statusStr = String(status || "").trim().toLowerCase();
+    const statusStr = String(status || "")
+      .trim()
+      .toLowerCase();
 
     // Check if toDate is perpetual/indefinite - always Active
-    if (toDateStr && (toDateStr.toLowerCase().includes("perpetual") || 
-        toDateStr.toLowerCase().includes("indefinite") || 
-        toDateStr.toLowerCase().includes("infinite"))) {
+    if (
+      toDateStr &&
+      (toDateStr.toLowerCase().includes("perpetual") ||
+        toDateStr.toLowerCase().includes("indefinite") ||
+        toDateStr.toLowerCase().includes("infinite"))
+    ) {
       return "Active";
     }
 
-    if(statusStr.includes("perpetual")) return "Active";
+    if (statusStr.includes("perpetual")) return "Active";
     // If status is provided, use it
     if (statusStr) {
       if (statusStr.includes("active")) return "Active";
@@ -138,11 +160,11 @@ export default function ImportDialog({ onImport, onClose }: ImportDialogProps) {
       if (statusStr.includes("renew")) return "Renewal Pending";
       if (statusStr.includes("draft")) return "Draft";
     }
-    
+
     // If status is empty, auto-determine from toDate
     if (toDateStr) {
       try {
-        const parts = toDateStr.split('.');
+        const parts = toDateStr.split(".");
         if (parts.length === 3) {
           const day = parseInt(parts[0]);
           const month = parseInt(parts[1]) - 1; // JavaScript months are 0-indexed
@@ -150,11 +172,10 @@ export default function ImportDialog({ onImport, onClose }: ImportDialogProps) {
           const toDate = new Date(year, month, day);
           const today = new Date();
           today.setHours(0, 0, 0, 0); // Reset time for date-only comparison
-          
+
           if (toDate >= today) {
             return "Active";
-          }
-          else {
+          } else {
             return "Expired";
           }
         }
@@ -162,53 +183,88 @@ export default function ImportDialog({ onImport, onClose }: ImportDialogProps) {
         // If date parsing fails, default to Draft
       }
     }
-    
+
     return "Draft"; // Default
   };
 
   // Normalize department codes
   const normalizeDepartment = (dept: unknown): DepartmentCode => {
-    const deptStr = String(dept || "").trim().toUpperCase();
+    const deptStr = String(dept || "")
+      .trim()
+      .toUpperCase();
     const deptMapping: Record<string, DepartmentCode> = {
-      "CSE": "CSE", "COMPUTER": "CSE", "CS": "CSE",
-      "ECE": "ECE", "ELECTRONICS": "ECE", "EC": "ECE",
-      "EEE": "EEE", "ELECTRICAL": "EEE", "EE": "EEE",
-      "MECH": "MECH", "MECHANICAL": "MECH", "ME": "MECH",
-      "CIVIL": "CIVIL", "CE": "CIVIL",
-      "IT": "IT", "INFORMATION": "IT",
-      "AIDS": "AIDS", "AI&DS": "AIDS", "AI": "AIDS",
-      "CSBS": "CSBS",
+      CSE: "CSE",
+      COMPUTER: "CSE",
+      CS: "CSE",
+      ECE: "ECE",
+      ELECTRONICS: "ECE",
+      EC: "ECE",
+      EEE: "EEE",
+      ELECTRICAL: "EEE",
+      EE: "EEE",
+      MECH: "MECH",
+      MECHANICAL: "MECH",
+      ME: "MECH",
+      CIVIL: "CIVIL",
+      CE: "CIVIL",
+      IT: "IT",
+      INFORMATION: "IT",
+      AIDS: "AIDS",
+      "AI&DS": "AIDS",
+      AI: "AIDS",
+      CSBS: "CSBS",
     };
-    
+
     // Try exact match first
     if (deptMapping[deptStr]) return deptMapping[deptStr];
-    
+
     // Try partial match
     for (const [key, value] of Object.entries(deptMapping)) {
       if (deptStr.includes(key)) return value;
     }
-    
+
     return "CSE"; // Default
   };
 
   // Normalize document availability
   const normalizeDocAvailability = (doc: unknown): DocumentAvailability => {
-    const docStr = String(doc || "").trim().toLowerCase();
-    if (docStr.includes("available") || docStr.includes("yes") || docStr.includes("soft") || docStr.includes("hard")) return "Available";
+    const docStr = String(doc || "")
+      .trim()
+      .toLowerCase();
+    if (
+      docStr.includes("available") ||
+      docStr.includes("yes") ||
+      docStr.includes("soft") ||
+      docStr.includes("hard")
+    )
+      return "Available";
     return "Not Available"; // Default
   };
 
   // Normalize yes/no fields
   const normalizeYesNo = (value: unknown): "Yes" | "No" => {
-    const valStr = String(value || "").trim().toLowerCase();
-    if (valStr.includes("yes") || valStr === "y" || valStr === "1" || valStr === "true") return "Yes";
+    const valStr = String(value || "")
+      .trim()
+      .toLowerCase();
+    if (
+      valStr.includes("yes") ||
+      valStr === "y" ||
+      valStr === "1" ||
+      valStr === "true"
+    )
+      return "Yes";
     return "No";
   };
 
   // Smart scope detection from company address
-  const detectScope = (scopeValue: unknown, companyAddress: unknown): "National" | "International" => {
-    const scopeStr = String(scopeValue || "").trim().toLowerCase();
-    
+  const detectScope = (
+    scopeValue: unknown,
+    companyAddress: unknown,
+  ): "National" | "International" => {
+    const scopeStr = String(scopeValue || "")
+      .trim()
+      .toLowerCase();
+
     // If scope is explicitly provided, use it
     if (scopeStr && scopeStr.includes("international")) {
       return "International";
@@ -216,42 +272,86 @@ export default function ImportDialog({ onImport, onClose }: ImportDialogProps) {
     if (scopeStr && scopeStr.includes("national")) {
       return "National";
     }
-    
+
     // If scope is not provided, detect from company address
-    const addressStr = String(companyAddress || "").trim().toLowerCase();
-    
+    const addressStr = String(companyAddress || "")
+      .trim()
+      .toLowerCase();
+
     // Indian location indicators
     const indianIndicators = [
-      'india', 'bharat', 'chennai', 'mumbai', 'delhi', 'bangalore', 'bengaluru',
-      'hyderabad', 'pune', 'kolkata', 'ahmedabad', 'tamilnadu', 'tamil nadu',
-      'karnataka', 'maharashtra', 'kerala', 'gujarat', 'rajasthan', 'madhya pradesh',
-      'uttar pradesh', 'west bengal', 'telangana', 'andhra pradesh'
+      "india",
+      "bharat",
+      "chennai",
+      "mumbai",
+      "delhi",
+      "bangalore",
+      "bengaluru",
+      "hyderabad",
+      "pune",
+      "kolkata",
+      "ahmedabad",
+      "tamilnadu",
+      "tamil nadu",
+      "karnataka",
+      "maharashtra",
+      "kerala",
+      "gujarat",
+      "rajasthan",
+      "madhya pradesh",
+      "uttar pradesh",
+      "west bengal",
+      "telangana",
+      "andhra pradesh",
     ];
-    
+
     // International country indicators
     const internationalIndicators = [
-      'usa', 'united states', 'uk', 'united kingdom', 'canada', 'australia',
-      'singapore', 'japan', 'germany', 'france', 'netherlands', 'sweden',
-      'switzerland', 'china', 'south korea', 'dubai', 'uae', 'malaysia'
+      "usa",
+      "united states",
+      "uk",
+      "united kingdom",
+      "canada",
+      "australia",
+      "singapore",
+      "japan",
+      "germany",
+      "france",
+      "netherlands",
+      "sweden",
+      "switzerland",
+      "china",
+      "south korea",
+      "dubai",
+      "uae",
+      "malaysia",
     ];
-    
+
     // Check for international indicators first (more specific)
-    if (internationalIndicators.some(indicator => addressStr.includes(indicator))) {
+    if (
+      internationalIndicators.some((indicator) =>
+        addressStr.includes(indicator),
+      )
+    ) {
       return "International";
     }
-    
+
     // Check for Indian indicators
-    if (indianIndicators.some(indicator => addressStr.includes(indicator))) {
+    if (indianIndicators.some((indicator) => addressStr.includes(indicator))) {
       return "National";
     }
-    
+
     // Default to National if can't determine
     return "National";
   };
 
   // Normalize maintainedBy field
-  const normalizeMaintainedBy = (value: unknown): "Institution" | "Incubation" | "Departments" => {
-    const valStr = String(value || "").trim().toLowerCase();
+  const normalizeMaintainedBy = (
+    value: unknown,
+  ): "Institution" | "Incubation" | "Departments" => {
+    const valStr = String(value || "")
+      .trim()
+      .toLowerCase();
     if (valStr.includes("institution")) return "Institution";
     if (valStr.includes("incubation")) return "Incubation";
     return "Departments"; // Default
@@ -303,9 +403,15 @@ export default function ImportDialog({ onImport, onClose }: ImportDialogProps) {
         const fromDate = parseDate(record.fromDate) || "";
         const toDate = parseDate(record.toDate) || "";
         const companyAddress = String(record.companyAddress || "").trim();
-        const hodApprovalDoc = record.hodApprovalDoc && String(record.hodApprovalDoc).trim() ? String(record.hodApprovalDoc).trim() : undefined;
-        const signedAgreementDoc = record.signedAgreementDoc && String(record.signedAgreementDoc).trim() ? String(record.signedAgreementDoc).trim() : undefined;
-        
+        const hodApprovalDoc =
+          record.hodApprovalDoc && String(record.hodApprovalDoc).trim()
+            ? String(record.hodApprovalDoc).trim()
+            : undefined;
+        const signedAgreementDoc =
+          record.signedAgreementDoc && String(record.signedAgreementDoc).trim()
+            ? String(record.signedAgreementDoc).trim()
+            : undefined;
+
         const emouRecord: Partial<EMoURecord> = {
           department: normalizeDepartment(record.department),
           companyName: String(record.companyName || "").trim(),
@@ -314,24 +420,37 @@ export default function ImportDialog({ onImport, onClose }: ImportDialogProps) {
           scope: detectScope(record.scope, companyAddress),
           status: normalizeStatus(record.status, toDate),
           maintainedBy: normalizeMaintainedBy(record.maintainedBy),
-          approvalStatus: (hodApprovalDoc && signedAgreementDoc) ? "pending" : "draft",
+          approvalStatus:
+            hodApprovalDoc && signedAgreementDoc ? "pending" : "draft",
           description: String(record.description || "").trim(),
-          documentAvailability: normalizeDocAvailability(record.documentAvailability),
+          documentAvailability: normalizeDocAvailability(
+            record.documentAvailability,
+          ),
           hodApprovalDoc: hodApprovalDoc,
           signedAgreementDoc: signedAgreementDoc,
           goingForRenewal: normalizeYesNo(record.goingForRenewal),
-          perStudentCost: record.perStudentCost && !isNaN(Number(record.perStudentCost))
-            ? Number(record.perStudentCost)
-            : 0,
-          placementOpportunity: record.placementOpportunity && !isNaN(Number(record.placementOpportunity))
-            ? Number(record.placementOpportunity)
-            : 0,
-          internshipOpportunity: record.internshipOpportunity && !isNaN(Number(record.internshipOpportunity))
-            ? Number(record.internshipOpportunity)
-            : 0,
-          companyRelationship: record.companyRelationship && !isNaN(Number(record.companyRelationship))
-            ? Math.max(1, Math.min(5, Number(record.companyRelationship))) as 1 | 2 | 3 | 4 | 5
-            : 3,
+          perStudentCost:
+            record.perStudentCost && !isNaN(Number(record.perStudentCost))
+              ? Number(record.perStudentCost)
+              : 0,
+          placementOpportunity:
+            record.placementOpportunity &&
+            !isNaN(Number(record.placementOpportunity))
+              ? Number(record.placementOpportunity)
+              : 0,
+          internshipOpportunity:
+            record.internshipOpportunity &&
+            !isNaN(Number(record.internshipOpportunity))
+              ? Number(record.internshipOpportunity)
+              : 0,
+          companyRelationship:
+            record.companyRelationship &&
+            !isNaN(Number(record.companyRelationship))
+              ? (Math.max(
+                  1,
+                  Math.min(5, Number(record.companyRelationship)),
+                ) as 1 | 2 | 3 | 4 | 5)
+              : 3,
         };
 
         // Only add optional fields if they have values (avoid undefined)
@@ -347,23 +466,53 @@ export default function ImportDialog({ onImport, onClose }: ImportDialogProps) {
         if (record.companyAddress && String(record.companyAddress).trim()) {
           emouRecord.companyAddress = String(record.companyAddress).trim();
         }
-        if (record.industryContactName && String(record.industryContactName).trim()) {
-          emouRecord.industryContactName = String(record.industryContactName).trim();
+        if (
+          record.industryContactName &&
+          String(record.industryContactName).trim()
+        ) {
+          emouRecord.industryContactName = String(
+            record.industryContactName,
+          ).trim();
         }
-        if (record.industryContactMobile && String(record.industryContactMobile).trim()) {
-          emouRecord.industryContactMobile = String(record.industryContactMobile).trim();
+        if (
+          record.industryContactMobile &&
+          String(record.industryContactMobile).trim()
+        ) {
+          emouRecord.industryContactMobile = String(
+            record.industryContactMobile,
+          ).trim();
         }
-        if (record.industryContactEmail && String(record.industryContactEmail).trim()) {
-          emouRecord.industryContactEmail = String(record.industryContactEmail).trim();
+        if (
+          record.industryContactEmail &&
+          String(record.industryContactEmail).trim()
+        ) {
+          emouRecord.industryContactEmail = String(
+            record.industryContactEmail,
+          ).trim();
         }
-        if (record.institutionContactName && String(record.institutionContactName).trim()) {
-          emouRecord.institutionContactName = String(record.institutionContactName).trim();
+        if (
+          record.institutionContactName &&
+          String(record.institutionContactName).trim()
+        ) {
+          emouRecord.institutionContactName = String(
+            record.institutionContactName,
+          ).trim();
         }
-        if (record.institutionContactMobile && String(record.institutionContactMobile).trim()) {
-          emouRecord.institutionContactMobile = String(record.institutionContactMobile).trim();
+        if (
+          record.institutionContactMobile &&
+          String(record.institutionContactMobile).trim()
+        ) {
+          emouRecord.institutionContactMobile = String(
+            record.institutionContactMobile,
+          ).trim();
         }
-        if (record.institutionContactEmail && String(record.institutionContactEmail).trim()) {
-          emouRecord.institutionContactEmail = String(record.institutionContactEmail).trim();
+        if (
+          record.institutionContactEmail &&
+          String(record.institutionContactEmail).trim()
+        ) {
+          emouRecord.institutionContactEmail = String(
+            record.institutionContactEmail,
+          ).trim();
         }
         if (record.clubsAligned && String(record.clubsAligned).trim()) {
           emouRecord.clubsAligned = String(record.clubsAligned).trim();
@@ -371,11 +520,25 @@ export default function ImportDialog({ onImport, onClose }: ImportDialogProps) {
         if (record.sdgGoals && String(record.sdgGoals).trim()) {
           emouRecord.sdgGoals = String(record.sdgGoals).trim();
         }
-        if (record.skillsTechnologies && String(record.skillsTechnologies).trim()) {
-          emouRecord.skillsTechnologies = String(record.skillsTechnologies).trim();
+        if (
+          record.skillsTechnologies &&
+          String(record.skillsTechnologies).trim()
+        ) {
+          emouRecord.skillsTechnologies = String(
+            record.skillsTechnologies,
+          ).trim();
         }
         if (record.benefitsAchieved && String(record.benefitsAchieved).trim()) {
           emouRecord.benefitsAchieved = String(record.benefitsAchieved).trim();
+        }
+        if (record.ieeeSociety && String(record.ieeeSociety).trim()) {
+          emouRecord.ieeeSociety = String(record.ieeeSociety).trim();
+        }
+        if (record.emouOutcome && String(record.emouOutcome).trim()) {
+          emouRecord.emouOutcome = String(record.emouOutcome).trim();
+        }
+        if (record.domain && String(record.domain).trim()) {
+          emouRecord.domain = String(record.domain).trim();
         }
 
         valid.push(emouRecord);
@@ -453,20 +616,33 @@ export default function ImportDialog({ onImport, onClose }: ImportDialogProps) {
                 Required Excel Columns:
               </h3>
               <div className="grid grid-cols-2 gap-2 text-xs text-gray-700">
-              {requiredFields.map((field) => (
-                <div key={field}>• {field}</div>
-              ))}
+                {requiredFields.map((field) => (
+                  <div key={field}>• {field}</div>
+                ))}
               </div>
               <div className="mt-4 pt-4 border-t border-gray-100">
-                <h4 className="text-xs font-semibold text-gray-600 mb-2">Smart Import Features:</h4>
-              <ul className="list-disc list-inside mt-1 space-y-1">
-                <li>Accepts dates in any format (12.02.2021, 23/3/22, 2021-03-15)</li>
-                <li>Auto-determines status from toDate if status field is empty</li>
-                <li>Auto-detects scope (National/International) from company address</li>
-                <li>Case-insensitive status (EXPIRED, Expired, expired)</li>
-                <li>Auto-detects departments (CSE, Computer, CS → CSE)</li>
-                <li>Sets approval status: pending if both docs uploaded, else draft</li>
-                <li>Missing fields are filled with defaults</li>
+                <h4 className="text-xs font-semibold text-gray-600 mb-2">
+                  Smart Import Features:
+                </h4>
+                <ul className="list-disc list-inside mt-1 space-y-1">
+                  <li>
+                    Accepts dates in any format (12.02.2021, 23/3/22,
+                    2021-03-15)
+                  </li>
+                  <li>
+                    Auto-determines status from toDate if status field is empty
+                  </li>
+                  <li>
+                    Auto-detects scope (National/International) from company
+                    address
+                  </li>
+                  <li>Case-insensitive status (EXPIRED, Expired, expired)</li>
+                  <li>Auto-detects departments (CSE, Computer, CS → CSE)</li>
+                  <li>
+                    Sets approval status: pending if both docs uploaded, else
+                    draft
+                  </li>
+                  <li>Missing fields are filled with defaults</li>
                 </ul>
               </div>
             </div>
