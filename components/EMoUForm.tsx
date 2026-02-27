@@ -467,7 +467,12 @@ export default function EMoUForm({
         });
       }
 
-      await onSubmit({ ...formData, approvalStatus } as Partial<EMoURecord>);
+      // Always set status to Draft on creation/edit — status is computed from dates only on admin approval
+      await onSubmit({
+        ...formData,
+        status: "Draft",
+        approvalStatus,
+      } as Partial<EMoURecord>);
     } catch {
       setShowAlert({ message: "Failed to save record", type: "error" });
     } finally {

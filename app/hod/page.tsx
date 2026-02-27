@@ -22,6 +22,7 @@ import { getEMoUs, updateEMoU } from "@/lib/firestore";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { useRouter } from "next/navigation";
 import { FiCalendar, FiChevronDown, FiUpload } from "react-icons/fi";
+import { MdArrowBack } from "react-icons/md";
 
 /**
  * Helper function to get sticky column positioning styles based on tab context
@@ -300,6 +301,11 @@ function HODPage() {
 
   const getDisplayStatus = (record: EMoURecord): string => {
     const toDate = record.toDate;
+    const hasDates = toDate && toDate.trim() !== "";
+
+    // If status is Draft and no dates, show Draft
+    if (record.status === "Draft" && !hasDates) return "Draft";
+
     if (
       toDate &&
       (toDate.toLowerCase().includes("perpetual") ||
@@ -307,6 +313,29 @@ function HODPage() {
         isPerpetualDate(toDate))
     ) {
       return "Active";
+    }
+
+    // For approved records with stale Draft status but valid dates, compute from dates
+    if (
+      record.status === "Draft" &&
+      hasDates &&
+      record.approvalStatus === "approved"
+    ) {
+      try {
+        const [day, month, year] = toDate.split(".").map(Number);
+        const expiryDate = new Date(year, month - 1, day);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        expiryDate.setHours(0, 0, 0, 0);
+        const twoMonthsFromNow = new Date(today);
+        twoMonthsFromNow.setMonth(twoMonthsFromNow.getMonth() + 2);
+
+        if (expiryDate < today) return "Expired";
+        if (expiryDate <= twoMonthsFromNow) return "Expiring";
+        return "Active";
+      } catch {
+        return "Draft";
+      }
     }
 
     if (record.status !== "Active") return record.status;
@@ -2057,9 +2086,9 @@ function HODPage() {
               </div>
               <button
                 onClick={() => router.push("/")}
-                className="btn btn-secondary"
+                className="btn btn-secondary flex items-center"
               >
-                ← Back to eMoUs
+               <MdArrowBack className="mr-2" /> Back to eMoUs
               </button>
             </div>
           </div>

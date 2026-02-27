@@ -15,6 +15,7 @@ interface RecordDetailPopupProps {
     | "placement"
     | "internship";
   clickX?: number;
+  clickY?: number;
 }
 
 export default function RecordDetailPopup({
@@ -23,13 +24,21 @@ export default function RecordDetailPopup({
   onClose,
   type = "total",
   clickX = 0,
+  clickY = 0,
 }: RecordDetailPopupProps) {
   const [isAnimating, setIsAnimating] = useState(false);
 
   useEffect(() => {
     // Trigger animation after mount
     setTimeout(() => setIsAnimating(true), 10);
+
+    // Prevent background scrolling while popup is open
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, []);
+
 
   const handleClose = () => {
     setIsAnimating(false);
@@ -148,10 +157,7 @@ export default function RecordDetailPopup({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-start pt-[9rem]"
-      onClick={handleClose}
-    >
+    <div className="fixed inset-0 z-50" onClick={handleClose}>
       {/* Backdrop with fade animation */}
       <div
         className={`fixed inset-0 transition-opacity duration-500 ease-out ${
@@ -161,13 +167,17 @@ export default function RecordDetailPopup({
 
       {/* Tooltip-style popup with bounce animation */}
       <div
-        className={`absolute bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[75vh] overflow-hidden border border-gray-200 transition-all duration-500 ease-out ${
+        className={`fixed bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[75vh] overflow-hidden border border-gray-200 transition-all duration-500 ease-out ${
           isAnimating
             ? "opacity-100 scale-100 translate-y-0"
             : "opacity-0 scale-95 -translate-y-4"
         }`}
         style={{
           left: `${calculateLeftPosition()}px`,
+          top:
+            clickY > 0
+              ? `${Math.min(clickY + 8, window.innerHeight - window.innerHeight * 0.75 - 16)}px`
+              : "9rem",
           animation: isAnimating
             ? "smoothBounceIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)"
             : "none",

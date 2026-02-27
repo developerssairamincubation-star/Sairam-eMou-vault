@@ -28,7 +28,6 @@ import {
   createEMoU,
   updateEMoU,
   deleteEMoU,
-  getEMoUsCount,
 } from "@/lib/firestore";
 import { uploadToCloudinary, deleteFromCloudinary } from "@/lib/cloudinary";
 import { useRouter } from "next/navigation";
@@ -251,27 +250,23 @@ function HomePage() {
         filters.department = selectedDepartment as FilterOptions["department"];
       }
 
-      // Special handling for "Expiring", "Renewal Pending", and "With Docs" - these need client-side or special filtering
-      if (selectedStatus === "Expiring") {
-        filters.status = "Active";
-      } else if (selectedStatus === "Renewal Pending") {
+      // Status filtering uses computed display status (not raw DB status),
+      // so we need client-side filtering for all status filters.
+      // Only set server-side status filter for "all" (no filter) and "Renewal Pending" (special field).
+      if (selectedStatus === "Renewal Pending") {
         // Already handled above with goingForRenewal filter - don't set status filter
-      } else if (selectedStatus === "With Docs") {
-        // Don't filter by status - we'll filter by document presence client-side
-      } else if (selectedStatus !== "all") {
-        filters.status = selectedStatus as FilterOptions["status"];
       }
+      // Don't set filters.status for any status value — we filter client-side by getDisplayStatus
 
       // Show only approved records for all users (including admin on main sheet)
       const approvalStatus = "approved";
 
       // When searching or applying client-side filters, fetch ALL records
       // Otherwise, fetch current page
+      const needsClientSideStatusFilter =
+        selectedStatus !== "all" && selectedStatus !== "Renewal Pending";
       const shouldFetchAll =
-        debouncedSearchTerm ||
-        showAll ||
-        selectedStatus === "With Docs" ||
-        selectedStatus === "Expiring";
+        debouncedSearchTerm || showAll || needsClientSideStatusFilter;
       const result = await getEMoUsPage(
         shouldFetchAll ? 1 : currentPage,
         shouldFetchAll ? 10000 : itemsPerPage,
@@ -322,44 +317,16 @@ function HomePage() {
         });
       }
 
-      // Filter for expiring records (within 2 months)
-      if (selectedStatus === "Expiring") {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const twoMonthsFromNow = new Date(today);
-        twoMonthsFromNow.setMonth(twoMonthsFromNow.getMonth() + 2);
-
-        data = data.filter((record) => {
-          if (
-            !record.toDate ||
-            record.toDate.toLowerCase().includes("perpetual") ||
-            record.toDate.toLowerCase().includes("indefinite")
-          ) {
-            return false;
-          }
-
-          // Check for large year dates (9999 etc.)
-          const parts = record.toDate.split(".");
-          if (parts.length === 3) {
-            const year = parseInt(parts[2], 10);
-            if (year >= 9000) return false; // Perpetual dates don't expire
-          }
-
-          try {
-            const toDate = parseDate(record.toDate);
-            toDate.setHours(0, 0, 0, 0);
-
-            // Record is expiring if toDate is between today and 2 months from now
-            return toDate > today && toDate <= twoMonthsFromNow;
-          } catch {
-            return false;
-          }
-        });
-      }
-
-      // Filter for records with documents
-      if (selectedStatus === "With Docs") {
+      // Client-side status filtering using computed display status
+      if (selectedStatus === "Active") {
+        data = data.filter((record) => getDisplayStatus(record) === "Active");
+      } else if (selectedStatus === "Expiring") {
+        data = data.filter((record) => getDisplayStatus(record) === "Expiring");
+      } else if (selectedStatus === "Expired") {
+        data = data.filter((record) => getDisplayStatus(record) === "Expired");
+      } else if (selectedStatus === "Draft") {
+        data = data.filter((record) => getDisplayStatus(record) === "Draft");
+      } else if (selectedStatus === "With Docs") {
         data = data.filter(
           (record) => record.documentAvailability === "Available",
         );
@@ -374,12 +341,8 @@ function HomePage() {
         return aSeq - bSeq;
       });
 
-      // When searching or filtering, paginate the filtered results client-side
-      if (
-        debouncedSearchTerm ||
-        selectedStatus === "Expiring" ||
-        selectedStatus === "With Docs"
-      ) {
+      // When searching or filtering client-side, paginate the filtered results
+      if (debouncedSearchTerm || needsClientSideStatusFilter) {
         const filteredTotal = data.length;
         const filteredPages = Math.ceil(filteredTotal / itemsPerPage);
 
@@ -417,132 +380,104 @@ function HomePage() {
       // Show only approved records stats for all users
       const approvalStatus = "approved";
 
-      // Get counts for different statuses
-      const [total, active, expired, draft] = await Promise.all([
-        getEMoUsCount(
-          selectedDepartment !== "all"
-            ? { department: selectedDepartment as FilterOptions["department"] }
-            : undefined,
-          approvalStatus,
-        ),
-        getEMoUsCount(
-          {
-            department:
-              selectedDepartment !== "all"
-                ? (selectedDepartment as FilterOptions["department"])
-                : undefined,
-            status: "Active",
-          },
-          approvalStatus,
-        ),
-        getEMoUsCount(
-          {
-            department:
-              selectedDepartment !== "all"
-                ? (selectedDepartment as FilterOptions["department"])
-                : undefined,
-            status: "Expired",
-          },
-          approvalStatus,
-        ),
-        getEMoUsCount(
-          {
-            department:
-              selectedDepartment !== "all"
-                ? (selectedDepartment as FilterOptions["department"])
-                : undefined,
-            status: "Draft",
-          },
-          approvalStatus,
-        ),
-      ]);
-
-      // Calculate expiring records (Active records expiring within 2 months)
-      let expiringCount = 0;
-      try {
-        const filters: FilterOptions = {
-          status: "Active",
-        };
-        if (selectedDepartment !== "all") {
-          filters.department =
-            selectedDepartment as FilterOptions["department"];
-        }
-
-        // Fetch active records to check expiration dates
-        const activeRecords = await getEMoUsPage(
-          1,
-          10000,
-          filters,
-          approvalStatus,
-        );
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const twoMonthsFromNow = new Date(today);
-        twoMonthsFromNow.setMonth(twoMonthsFromNow.getMonth() + 2);
-
-        expiringCount = activeRecords.data.filter((record) => {
-          if (
-            !record.toDate ||
-            record.toDate.toLowerCase().includes("perpetual") ||
-            record.toDate.toLowerCase().includes("indefinite")
-          ) {
-            return false;
-          }
-
-          // Check for large year dates (9999 etc.)
-          const parts = record.toDate.split(".");
-          if (parts.length === 3) {
-            const year = parseInt(parts[2], 10);
-            if (year >= 9000) return false; // Perpetual dates don't expire
-          }
-
-          try {
-            const toDate = parseDate(record.toDate);
-            toDate.setHours(0, 0, 0, 0);
-
-            // Record is expiring if toDate is between today and 2 months from now
-            return toDate > today && toDate <= twoMonthsFromNow;
-          } catch {
-            return false;
-          }
-        }).length;
-      } catch (error) {
-        console.error("Failed to calculate expiring records:", error);
+      // Fetch all approved records once and compute stats client-side
+      // This ensures stats match the computed display status (not stale DB status)
+      const filters: FilterOptions = {};
+      if (selectedDepartment !== "all") {
+        filters.department = selectedDepartment as FilterOptions["department"];
       }
 
-      // Calculate withDocs count and renewal count from all approved records
-      let withDocsCount = 0;
+      const allApproved = await getEMoUsPage(1, 10000, filters, approvalStatus);
+
+      const allRecords = allApproved.data;
+      const total = allRecords.length;
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const twoMonthsFromNow = new Date(today);
+      twoMonthsFromNow.setMonth(twoMonthsFromNow.getMonth() + 2);
+
+      let activeCount = 0;
+      let expiringCount = 0;
+      let expiredCount = 0;
+      let draftCount = 0;
       let renewalCount = 0;
-      try {
-        const allApprovedFilters: FilterOptions = {};
-        if (selectedDepartment !== "all") {
-          allApprovedFilters.department =
-            selectedDepartment as FilterOptions["department"];
+      let withDocsCount = 0;
+
+      for (const record of allRecords) {
+        // Compute display status from dates (same logic as getDisplayStatus)
+        const toDate = record.toDate;
+        const hasDates = toDate && toDate.trim() !== "";
+
+        let computedStatus: string;
+
+        if (!hasDates && record.status === "Draft") {
+          computedStatus = "Draft";
+        } else if (
+          toDate &&
+          (toDate.toLowerCase().includes("perpetual") ||
+            toDate.toLowerCase().includes("indefinite") ||
+            isPerpetualDate(toDate))
+        ) {
+          computedStatus = "Active";
+        } else if (record.status === "Draft" && hasDates) {
+          // Approved record with stale Draft status - compute from dates
+          try {
+            const parsedDate = parseDate(toDate);
+            parsedDate.setHours(0, 0, 0, 0);
+            if (parsedDate < today) {
+              computedStatus = "Expired";
+            } else if (parsedDate <= twoMonthsFromNow) {
+              computedStatus = "Expiring";
+            } else {
+              computedStatus = "Active";
+            }
+          } catch {
+            computedStatus = "Draft";
+          }
+        } else if (record.status === "Active" && hasDates) {
+          try {
+            const parsedDate = parseDate(toDate);
+            parsedDate.setHours(0, 0, 0, 0);
+            if (parsedDate > today && parsedDate <= twoMonthsFromNow) {
+              computedStatus = "Expiring";
+            } else {
+              computedStatus = "Active";
+            }
+          } catch {
+            computedStatus = "Active";
+          }
+        } else {
+          computedStatus = record.status;
         }
-        const allApproved = await getEMoUsPage(
-          1,
-          10000,
-          allApprovedFilters,
-          approvalStatus,
-        );
-        withDocsCount = allApproved.data.filter(
-          (r) => r.documentAvailability === "Available",
-        ).length;
-        renewalCount = allApproved.data.filter(
-          (r) => r.goingForRenewal === "Yes",
-        ).length;
-      } catch (error) {
-        console.error("Failed to calculate withDocs count:", error);
+
+        // Count by computed status
+        switch (computedStatus) {
+          case "Active":
+            activeCount++;
+            break;
+          case "Expiring":
+            expiringCount++;
+            break;
+          case "Expired":
+            expiredCount++;
+            break;
+          case "Draft":
+            draftCount++;
+            break;
+        }
+
+        // Count renewal and docs
+        if (record.goingForRenewal === "Yes") renewalCount++;
+        if (record.documentAvailability === "Available") withDocsCount++;
       }
 
       setStats({
         total,
-        active,
+        active: activeCount,
         expiring: expiringCount,
-        expired,
-        draft,
+        expired: expiredCount,
+        draft: draftCount,
         renewal: renewalCount,
         withDocs: withDocsCount,
       });
@@ -661,7 +596,7 @@ function HomePage() {
     setInlineEditData((prev) => {
       const updated = { ...prev, [field]: value };
 
-      // Auto-update status when toDate changes
+      // Auto-update status when toDate changes (main page only shows approved records)
       if (field === "toDate" && typeof value === "string") {
         // Check for perpetual text or large year dates
         const parts = value.split(".");
@@ -740,7 +675,7 @@ function HomePage() {
         [field]: value,
       };
 
-      // Auto-update status when toDate changes
+      // Auto-update status when toDate changes (main page only shows approved records)
       if (field === "toDate" && typeof value === "string") {
         // Check for perpetual text or large year dates
         const parts = value.split(".");
@@ -1031,9 +966,16 @@ function HomePage() {
   };
 
   // Calculate display status - shows "Expiring" instead of "Active" for records expiring within 2 months
+  // On the main page (approved records only), compute status from dates even if DB status is "Draft"
   const getDisplayStatus = (record: EMoURecord): string => {
-    // Check if toDate is perpetual - always show Active for perpetual dates
+    // For approved records with Draft status but valid dates, compute status from dates
     const toDate = record.toDate;
+    const hasDates = toDate && toDate.trim() !== "";
+
+    // If status is Draft and no dates, show Draft
+    if (record.status === "Draft" && !hasDates) return "Draft";
+
+    // Check if toDate is perpetual - always show Active for perpetual dates
     if (
       toDate &&
       (toDate.toLowerCase().includes("perpetual") ||
@@ -1041,6 +983,24 @@ function HomePage() {
         isPerpetualDate(toDate))
     ) {
       return "Active";
+    }
+
+    // If status is Draft but has dates, compute from dates (approved records with stale Draft status)
+    if (record.status === "Draft" && hasDates) {
+      try {
+        const parsedDate = parseDate(toDate);
+        parsedDate.setHours(0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const twoMonthsFromNow = new Date(today);
+        twoMonthsFromNow.setMonth(twoMonthsFromNow.getMonth() + 2);
+
+        if (parsedDate < today) return "Expired";
+        if (parsedDate <= twoMonthsFromNow) return "Expiring";
+        return "Active";
+      } catch {
+        return "Draft";
+      }
     }
 
     // If not Active, return as-is

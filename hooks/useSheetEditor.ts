@@ -55,8 +55,8 @@ export function useSheetEditor({ onSave, onError }: UseSheetEditorProps) {
       setInlineEditData((prev) => {
         const updates: Partial<EMoURecord> = { [field]: value };
 
-        // Auto-update status when toDate changes
-        if (field === "toDate" && typeof value === "string") {
+        // Auto-update status when toDate changes (but preserve Draft status)
+        if (field === "toDate" && typeof value === "string" && prev.status !== "Draft") {
           const newStatus = calculateStatusFromToDate(value);
           if (newStatus) {
             updates.status = newStatus;
@@ -112,8 +112,8 @@ export function useSheetEditor({ onSave, onError }: UseSheetEditorProps) {
           [field]: value,
         };
 
-        // Auto-update status when toDate changes
-        if (field === "toDate" && typeof value === "string") {
+        // Auto-update status when toDate changes (but preserve Draft status)
+        if (field === "toDate" && typeof value === "string" && inlineEditData.status !== "Draft") {
           const newStatus = calculateStatusFromToDate(value);
           if (newStatus) {
             updates.status = newStatus;

@@ -28,6 +28,7 @@ import {
   PolarRadiusAxis,
   Radar,
 } from "recharts";
+import { MdArrowBack } from "react-icons/md";
 
 // All available departments
 const ALL_DEPARTMENTS = [
@@ -91,8 +92,14 @@ const parseDate = (dateStr: string): Date => {
 };
 
 // Get display status - perpetual dates are always Active, also calculates "Expiring" for near-expiry records
+// For approved records with stale Draft status but valid dates, compute status from dates
 const getDisplayStatus = (record: EMoURecord): string => {
   const toDate = record.toDate;
+  const hasDates = toDate && toDate.trim() !== "";
+
+  // If status is Draft and no dates, show Draft
+  if (record.status === "Draft" && !hasDates) return "Draft";
+
   // Check if toDate is perpetual - always show Active for perpetual dates
   if (
     toDate &&
@@ -103,7 +110,25 @@ const getDisplayStatus = (record: EMoURecord): string => {
     return "Active";
   }
 
-  // If not Active, return as-is (Expired, Renewal Pending, Draft, etc.)
+  // If status is Draft but has dates (approved records with stale Draft status), compute from dates
+  if (record.status === "Draft" && hasDates) {
+    try {
+      const parsedDate = parseDate(toDate);
+      parsedDate.setHours(0, 0, 0, 0);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const twoMonthsFromNow = new Date(today);
+      twoMonthsFromNow.setMonth(twoMonthsFromNow.getMonth() + 2);
+
+      if (parsedDate < today) return "Expired";
+      if (parsedDate <= twoMonthsFromNow) return "Expiring";
+      return "Active";
+    } catch {
+      return "Draft";
+    }
+  }
+
+  // If not Active, return as-is (Expired, Renewal Pending, etc.)
   if (record.status !== "Active") return record.status;
 
   // Check if Active record is expiring (within 2 months)
@@ -159,7 +184,15 @@ export default function Dashboard() {
       | "placement"
       | "internship";
     clickX?: number;
-  }>({ isOpen: false, title: "", records: [], type: "total", clickX: 0 });
+    clickY?: number;
+  }>({
+    isOpen: false,
+    title: "",
+    records: [],
+    type: "total",
+    clickX: 0,
+    clickY: 0,
+  });
   const [graphPopup, setGraphPopup] = useState<{
     isOpen: boolean;
     type: string;
@@ -466,16 +499,16 @@ export default function Dashboard() {
       | "internship" = "total",
     event?: React.MouseEvent,
   ) => {
-    const clickX = event
-      ? event.currentTarget.getBoundingClientRect().left +
-        event.currentTarget.getBoundingClientRect().width / 2
-      : window.innerWidth / 2;
+    const rect = event?.currentTarget.getBoundingClientRect();
+    const clickX = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
+    const clickY = rect ? rect.bottom : 0;
     setPopupData({
       isOpen: true,
       title,
       records: filteredRecords,
       type,
       clickX,
+      clickY,
     });
   };
 
@@ -486,6 +519,7 @@ export default function Dashboard() {
       records: [],
       type: "total",
       clickX: 0,
+      clickY: 0,
     });
   };
 
@@ -539,9 +573,9 @@ export default function Dashboard() {
             </div>
             <Link
               href="/"
-              className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
+              className="px-4 py-2 bg-gray-800 flex items-center text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
             >
-              ← Back to Records
+              <MdArrowBack className="mr-2" /> Back to Records
             </Link>
           </div>
 
@@ -770,8 +804,12 @@ export default function Dashboard() {
                 className="bg-white rounded-lg p-3 border border-gray-200 cursor-pointer hover:shadow-lg transition-shadow"
                 onClick={(e) =>
                   showRecords(
-                    "Draft eMoUs",
-                    records.filter((r) => r.approvalStatus === "draft"),
+                    "Draft & Pending eMoUs",
+                    records.filter(
+                      (r) =>
+                        r.approvalStatus === "draft" ||
+                        r.approvalStatus === "pending",
+                    ),
                     "draft",
                     e,
                   )
@@ -1608,6 +1646,7 @@ export default function Dashboard() {
           onClose={closePopup}
           type={popupData.type}
           clickX={popupData.clickX}
+          clickY={popupData.clickY}
         />
       )}
 

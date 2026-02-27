@@ -25,6 +25,7 @@ import {
   DOMAIN_OPTIONS,
 } from "@/types";
 import { getAllUsers, getEMoUs, updateEMoU, deleteEMoU } from "@/lib/firestore";
+import { calculateStatusFromToDate } from "@/lib/sheetsUtils";
 import { uploadToCloudinary, deleteFromCloudinary } from "@/lib/cloudinary";
 import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
@@ -490,7 +491,25 @@ function AdminPage() {
 
   const handleApproveRecord = async (recordId: string) => {
     try {
-      await updateEMoU(recordId, { approvalStatus: "approved" });
+      // Find the record to compute status from its dates
+      const record = [...pendingRecords, ...draftRecords].find(
+        (r) => r.id === recordId,
+      );
+      const updates: Partial<EMoURecord> = { approvalStatus: "approved" };
+
+      if (record) {
+        // Compute status based on toDate
+        if (!record.toDate || record.toDate.trim() === "") {
+          updates.status = "Draft";
+        } else {
+          const computedStatus = calculateStatusFromToDate(record.toDate);
+          if (computedStatus) {
+            updates.status = computedStatus;
+          }
+        }
+      }
+
+      await updateEMoU(recordId, updates);
       setAlert({ message: "Record approved successfully!", type: "success" });
       await loadApprovalRecords();
     } catch (error) {

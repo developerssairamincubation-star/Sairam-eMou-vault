@@ -64,6 +64,9 @@ export function getDisplayStatus(record: EMoURecord): string {
     return "Draft";
   }
 
+  // Draft records should always show as Draft regardless of dates
+  if (record.status === "Draft") return "Draft";
+
   // Check if toDate is perpetual - always show Active for perpetual dates
   const toDate = record.toDate;
   if (
