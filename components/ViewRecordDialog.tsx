@@ -248,6 +248,7 @@ export default function ViewRecordDialog({
                 record.clubsAligned ||
                 record.sdgGoals ||
                 record.ieeeSociety ||
+                record.ieeeCommunity ||
                 record.emouOutcome) && (
                 <div className="bg-white rounded-lg p-5 border border-gray-200 shadow-sm">
                   <h3 className="text-xs font-semibold text-gray-600 mb-3 uppercase tracking-wider">
@@ -287,6 +288,17 @@ export default function ViewRecordDialog({
                             IEEE Society
                           </span>
                           <p className="text-gray-700">{record.ieeeSociety}</p>
+                        </div>
+                      )}
+                    {record.ieeeCommunity &&
+                      record.ieeeCommunity !== "Not Applicable" && (
+                        <div>
+                          <span className="text-xs font-medium text-gray-500 block mb-1">
+                            IEEE Community
+                          </span>
+                          <p className="text-gray-700">
+                            {record.ieeeCommunity}
+                          </p>
                         </div>
                       )}
                     {record.emouOutcome && (

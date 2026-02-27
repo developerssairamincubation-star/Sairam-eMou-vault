@@ -84,6 +84,7 @@ export default function RecordDetailPopup({
       "Going For Renewal": record.goingForRenewal || "No",
       "Benefits Achieved": record.benefitsAchieved || "",
       "IEEE Society": record.ieeeSociety || "",
+      "IEEE Community": record.ieeeCommunity || "",
       "EMoU Outcome": record.emouOutcome || "",
       Domain: record.domain || "",
       "Document Availability": record.documentAvailability || "Not Available",

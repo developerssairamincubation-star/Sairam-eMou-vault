@@ -33,21 +33,20 @@ export const IEEE_SOCIETIES = [
   "IEEE Antennas and Propagation Society",
   "IEEE Broadcast Technology Society",
   "IEEE Circuits and Systems Society",
-  "IEEE Communications Society",
-  "IEEE Components, Packaging and Manufacturing Technology Society",
-  "IEEE Computational Intelligence Society",
+  "IEEE Communication Society",
   "IEEE Computer Society",
+  "IEEE Computational Intelligence Society",
   "IEEE Consumer Technology Society",
   "IEEE Control Systems Society",
   "IEEE Dielectrics and Electrical Insulation Society",
   "IEEE Education Society",
-  "IEEE Electromagnetic Compatibility Society",
   "IEEE Electron Devices Society",
   "IEEE Electronics Packaging Society",
+  "IEEE Electromagnetic Compatibility Society",
   "IEEE Engineering in Medicine and Biology Society",
   "IEEE Geoscience and Remote Sensing Society",
+  "IEEE Industrial Applications Society",
   "IEEE Industrial Electronics Society",
-  "IEEE Industry Applications Society",
   "IEEE Information Theory Society",
   "IEEE Instrumentation and Measurement Society",
   "IEEE Intelligent Transportation Systems Society",
@@ -55,24 +54,84 @@ export const IEEE_SOCIETIES = [
   "IEEE Microwave Theory and Technology Society",
   "IEEE Nuclear and Plasma Sciences Society",
   "IEEE Oceanic Engineering Society",
-  "IEEE Photonics Society",
   "IEEE Power Electronics Society",
-  "IEEE Power and Energy Society",
+  "IEEE Power & Energy Society",
   "IEEE Product Safety Engineering Society",
   "IEEE Professional Communication Society",
+  "IEEE Photonics Society",
   "IEEE Reliability Society",
   "IEEE Robotics and Automation Society",
   "IEEE Signal Processing Society",
   "IEEE Society on Social Implications of Technology",
   "IEEE Solid-State Circuits Society",
-  "IEEE Systems, Man, and Cybernetics Society",
-  "IEEE Technology and Engineering Management Society",
+  "IEEE Systems, Man and Cybernetics Society",
+  "IEEE Technology & Engineering Management Society",
   "IEEE Ultrasonics, Ferroelectrics, and Frequency Control Society",
   "IEEE Vehicular Technology Society",
+  "IEEE Women In Engineering (WiE)",
+  "IEEE Nano Technology Council",
+  "IEEE SIGHT (Special Interest Group on Humanitarian Technology)",
   "Not Applicable",
 ] as const;
 
 export type IEEESociety = typeof IEEE_SOCIETIES[number];
+
+// IEEE Communities
+export const IEEE_COMMUNITIES = [
+  "Blockchain Community",
+  "Brain Community",
+  "Digital Privacy Community",
+  "Digital Reality Community",
+  "Entrepreneurship Community",
+  "Future Networks Community",
+  "Intl Roadmap for Devices and Systems",
+  "Internet of Things Community",
+  "Public Safety Technology Community",
+  "Quantum Community",
+  "Smart Cities Community",
+  "Tech Ethics Community",
+  "IEEE Technology for a Sustainable Climate Community",
+  "Not Applicable",
+] as const;
+
+export type IEEECommunity = typeof IEEE_COMMUNITIES[number];
+
+// Club options
+export const CLUB_OPTIONS = [
+  "Technoculture Club",
+  "Automobile Club",
+  "Code Club",
+  "Cyber Club",
+  "Disaster Management & Safety Club",
+  "ECO and Swacch Bharat",
+  "ENSAV Club",
+  "English Language & Literature Club",
+  "Foreign Language Club",
+  "Fine Arts Association",
+  "Health & Yoga Club",
+  "M-apps Club",
+  "Maths Club",
+  "Photography Club",
+  "Robotics Club",
+  "Rotaract Club",
+  "Science Club",
+  "Skill Development Club",
+  "Sai Muthamizh Mandram",
+  "Young Indians Club",
+  "Red Ribbon Club",
+  "Game Development Club",
+  "AI Club",
+  "Entrepreneurship Cell",
+  "Higher Education Cell",
+  "NCC",
+  "NSS",
+  "Women Empowerment Cell (WOWWW)",
+  "YRC",
+  "IPR",
+  "Not Applicable",
+] as const;
+
+export type ClubOption = typeof CLUB_OPTIONS[number];
 
 // EMoU Outcome predefined options
 export const EMOU_OUTCOME_OPTIONS = [
@@ -160,6 +219,7 @@ export interface EMoURecord {
   benefitsAchieved?: string;
   companyRelationship?: 1 | 2 | 3 | 4 | 5;
   ieeeSociety?: string; // Selected IEEE society
+  ieeeCommunity?: string; // Selected IEEE community
   emouOutcome?: string; // Comma-separated outcomes (predefined + custom)
   domain?: string; // Selected domain
   

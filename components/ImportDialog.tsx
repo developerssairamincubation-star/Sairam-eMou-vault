@@ -534,6 +534,9 @@ export default function ImportDialog({ onImport, onClose }: ImportDialogProps) {
         if (record.ieeeSociety && String(record.ieeeSociety).trim()) {
           emouRecord.ieeeSociety = String(record.ieeeSociety).trim();
         }
+        if (record.ieeeCommunity && String(record.ieeeCommunity).trim()) {
+          emouRecord.ieeeCommunity = String(record.ieeeCommunity).trim();
+        }
         if (record.emouOutcome && String(record.emouOutcome).trim()) {
           emouRecord.emouOutcome = String(record.emouOutcome).trim();
         }

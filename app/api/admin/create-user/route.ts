@@ -3,7 +3,6 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { initializeApp, getApps, cert } from "firebase-admin/app";
 import nodemailer from "nodemailer";
-import { BiCctv } from "react-icons/bi";
 
 // Initialize Firebase Admin SDK
 if (!getApps().length) {
@@ -358,14 +357,12 @@ export async function POST(request: NextRequest) {
       emailSent: true,
     });
 
-    // Return success with temporary password and verification link
+    // Return success (sensitive data stays on backend only)
     return NextResponse.json({
       success: true,
-      message: "User created successfully",
+      message: "User created successfully. Welcome email with credentials has been sent.",
       userId: userRecord.uid,
       email,
-      temporaryPassword: password,
-      emailVerificationLink: verificationLink,
     });
 
   } catch (error) {

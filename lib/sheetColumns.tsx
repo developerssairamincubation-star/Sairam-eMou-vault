@@ -251,6 +251,14 @@ export const standardColumns: SheetsTableColumn[] = [
     truncate: 40,
   },
   {
+    key: "ieeeCommunity",
+    label: "IEEE Community",
+    width: "200px",
+    editable: true,
+    type: "text",
+    truncate: 40,
+  },
+  {
     key: "emouOutcome",
     label: "EMoU Outcome",
     width: "220px",

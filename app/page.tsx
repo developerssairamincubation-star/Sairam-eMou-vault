@@ -18,6 +18,8 @@ import {
   EMoURecord,
   FilterOptions,
   IEEE_SOCIETIES,
+  IEEE_COMMUNITIES,
+  CLUB_OPTIONS,
   EMOU_OUTCOME_OPTIONS,
   DOMAIN_OPTIONS,
 } from "@/types";
@@ -310,6 +312,7 @@ function HomePage() {
             r.documentAvailability,
             r.createdByName,
             r.ieeeSociety,
+            r.ieeeCommunity,
             r.emouOutcome,
             r.domain,
           ];
@@ -855,6 +858,7 @@ function HomePage() {
       "Placement Opportunities",
       "Internship Opportunities",
       "IEEE Society",
+      "IEEE Community",
       "EMoU Outcome",
       "Domain",
       "Created By",
@@ -871,6 +875,7 @@ function HomePage() {
       r.placementOpportunity || 0,
       r.internshipOpportunity || 0,
       r.ieeeSociety || "",
+      `"${(r.ieeeCommunity || "").replace(/"/g, '""')}"`,
       `"${(r.emouOutcome || "").replace(/"/g, '""')}"`,
       r.domain || "",
       r.createdByName,
@@ -1495,6 +1500,7 @@ function HomePage() {
                         <th style={{ width: "80px" }}>Renewal</th>
                         <th style={{ minWidth: "200px" }}>Benefits Achieved</th>
                         <th style={{ minWidth: "200px" }}>IEEE Society</th>
+                        <th style={{ minWidth: "200px" }}>IEEE Community</th>
                         <th style={{ minWidth: "220px" }}>EMoU Outcome</th>
                         <th style={{ minWidth: "220px" }}>Domain</th>
                         <th style={{ width: "120px" }}>Created By</th>
@@ -2225,11 +2231,68 @@ function HomePage() {
                               record.institutionContactEmail || "-",
                               "text-xs",
                             )}
-                            {renderEditableCell(
-                              "clubsAligned",
-                              record.clubsAligned || "-",
-                              "text-xs",
-                            )}
+                            {/* Clubs Aligned - Searchable Dropdown */}
+                            {(() => {
+                              const isEditing =
+                                editingCell?.recordId === record.id &&
+                                editingCell?.field === "clubsAligned";
+                              const cellStyle = isEditing
+                                ? { padding: 0, overflow: "visible" as const }
+                                : {};
+                              return (
+                                <td
+                                  className={`text-xs relative ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
+                                  onClick={() =>
+                                    isEditable &&
+                                    handleCellClick(record, "clubsAligned")
+                                  }
+                                  style={cellStyle}
+                                  title={
+                                    isEditable && !isEditing
+                                      ? "Click to select"
+                                      : ""
+                                  }
+                                >
+                                  {isEditing ? (
+                                    <SearchableCellDropdown
+                                      options={CLUB_OPTIONS.map((c) => ({
+                                        value: c,
+                                        label: c,
+                                      }))}
+                                      value={
+                                        (inlineEditData.clubsAligned as string) ||
+                                        record.clubsAligned ||
+                                        "Not Applicable"
+                                      }
+                                      onChange={(value) =>
+                                        saveFieldDirectly("clubsAligned", value)
+                                      }
+                                      onClose={cancelInlineEdit}
+                                      placeholder="Club"
+                                    />
+                                  ) : (
+                                    <span className="flex items-center justify-between gap-1 px-1">
+                                      <span
+                                        className="truncate"
+                                        title={record.clubsAligned || "-"}
+                                      >
+                                        {(() => {
+                                          const val =
+                                            record.clubsAligned || "-";
+                                          return val.length > 30
+                                            ? val.substring(0, 30) + "..."
+                                            : val;
+                                        })()}
+                                      </span>
+                                      <FiChevronDown
+                                        className="text-blue-600 flex-shrink-0"
+                                        size={14}
+                                      />
+                                    </span>
+                                  )}
+                                </td>
+                              );
+                            })()}
                             {renderEditableCell(
                               "sdgGoals",
                               record.sdgGoals || "-",
@@ -2371,6 +2434,75 @@ function HomePage() {
                                         {(() => {
                                           const val =
                                             record.ieeeSociety ||
+                                            "Not Applicable";
+                                          return val.length > 30
+                                            ? val.substring(0, 30) + "..."
+                                            : val;
+                                        })()}
+                                      </span>
+                                      <FiChevronDown
+                                        className="text-blue-600 flex-shrink-0"
+                                        size={14}
+                                      />
+                                    </span>
+                                  )}
+                                </td>
+                              );
+                            })()}
+                            {/* IEEE Community - Searchable Dropdown */}
+                            {(() => {
+                              const isEditing =
+                                editingCell?.recordId === record.id &&
+                                editingCell?.field === "ieeeCommunity";
+                              const cellStyle = isEditing
+                                ? { padding: 0, overflow: "visible" as const }
+                                : {};
+                              return (
+                                <td
+                                  className={`text-xs relative ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
+                                  onClick={() =>
+                                    isEditable &&
+                                    handleCellClick(record, "ieeeCommunity")
+                                  }
+                                  style={cellStyle}
+                                  title={
+                                    isEditable && !isEditing
+                                      ? "Click to select"
+                                      : ""
+                                  }
+                                >
+                                  {isEditing ? (
+                                    <SearchableCellDropdown
+                                      options={IEEE_COMMUNITIES.map((c) => ({
+                                        value: c,
+                                        label: c,
+                                      }))}
+                                      value={
+                                        (inlineEditData.ieeeCommunity as string) ||
+                                        record.ieeeCommunity ||
+                                        "Not Applicable"
+                                      }
+                                      onChange={(value) =>
+                                        saveFieldDirectly(
+                                          "ieeeCommunity",
+                                          value,
+                                        )
+                                      }
+                                      onClose={cancelInlineEdit}
+                                      placeholder="IEEE Community"
+                                    />
+                                  ) : (
+                                    <span className="flex items-center justify-between gap-1 px-1">
+                                      <span
+                                        className="truncate"
+                                        title={
+                                          record.ieeeCommunity ||
+                                          "Not Applicable"
+                                        }
+                                      >
+                                        {(() => {
+                                          const val =
+                                            record.ieeeCommunity ||
                                             "Not Applicable";
                                           return val.length > 30
                                             ? val.substring(0, 30) + "..."

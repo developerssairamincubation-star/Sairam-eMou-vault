@@ -9,6 +9,8 @@ import {
   ScopeType,
   MaintainedBy,
   IEEE_SOCIETIES,
+  IEEE_COMMUNITIES,
+  CLUB_OPTIONS,
   EMOU_OUTCOME_OPTIONS,
   DOMAIN_OPTIONS,
 } from "@/types";
@@ -144,6 +146,7 @@ export default function EMoUForm({
     benefitsAchieved: initialData?.benefitsAchieved || "",
     companyRelationship: initialData?.companyRelationship || 3,
     ieeeSociety: initialData?.ieeeSociety || "Not Applicable",
+    ieeeCommunity: initialData?.ieeeCommunity || "Not Applicable",
     emouOutcome: initialData?.emouOutcome || "Not Applicable",
     domain: initialData?.domain || "Not Applicable",
   });
@@ -152,6 +155,17 @@ export default function EMoUForm({
   const [ieeeSearchTerm, setIeeeSearchTerm] = useState("");
   const [isIeeeDropdownOpen, setIsIeeeDropdownOpen] = useState(false);
   const ieeeDropdownRef = useRef<HTMLDivElement>(null);
+
+  // IEEE Community search state
+  const [ieeeCommunitySearchTerm, setIeeeCommunitySearchTerm] = useState("");
+  const [isIeeeCommunityDropdownOpen, setIsIeeeCommunityDropdownOpen] =
+    useState(false);
+  const ieeeCommunityDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Clubs search state
+  const [clubsSearchTerm, setClubsSearchTerm] = useState("");
+  const [isClubsDropdownOpen, setIsClubsDropdownOpen] = useState(false);
+  const clubsDropdownRef = useRef<HTMLDivElement>(null);
 
   // Domain search state
   const [domainSearchTerm, setDomainSearchTerm] = useState("");
@@ -164,6 +178,16 @@ export default function EMoUForm({
   // Filter IEEE societies based on search
   const filteredIeeeSocieties = IEEE_SOCIETIES.filter((s) =>
     s.toLowerCase().includes(ieeeSearchTerm.toLowerCase()),
+  );
+
+  // Filter IEEE communities based on search
+  const filteredIeeeCommunities = IEEE_COMMUNITIES.filter((c) =>
+    c.toLowerCase().includes(ieeeCommunitySearchTerm.toLowerCase()),
+  );
+
+  // Filter clubs based on search
+  const filteredClubs = CLUB_OPTIONS.filter((c) =>
+    c.toLowerCase().includes(clubsSearchTerm.toLowerCase()),
   );
 
   // Filter domains based on search
@@ -194,6 +218,38 @@ export default function EMoUForm({
     }
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isIeeeDropdownOpen]);
+
+  // Close IEEE Community dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        ieeeCommunityDropdownRef.current &&
+        !ieeeCommunityDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsIeeeCommunityDropdownOpen(false);
+      }
+    };
+    if (isIeeeCommunityDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isIeeeCommunityDropdownOpen]);
+
+  // Close Clubs dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        clubsDropdownRef.current &&
+        !clubsDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsClubsDropdownOpen(false);
+      }
+    };
+    if (isClubsDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isClubsDropdownOpen]);
 
   // Perpetual/indefinite date state
   const [isPerpetual, setIsPerpetual] = useState(() => {
@@ -240,6 +296,7 @@ export default function EMoUForm({
       benefitsAchieved: "",
       companyRelationship: 3 as const,
       ieeeSociety: "Not Applicable",
+      ieeeCommunity: "Not Applicable",
       emouOutcome: "Not Applicable",
       domain: "Not Applicable",
     }),
@@ -989,19 +1046,88 @@ export default function EMoUForm({
                 placeholder="List of skills and technologies"
               />
             </div>
-            <div>
+            <div ref={clubsDropdownRef}>
               <label className="block text-xs font-medium text-[#4b5563] mb-1">
                 Clubs Aligned
               </label>
-              <input
-                type="text"
-                value={formData.clubsAligned}
-                onChange={(e) =>
-                  setFormData({ ...formData, clubsAligned: e.target.value })
-                }
-                className="w-full"
-                placeholder="Coding Club, AI Club, etc."
-              />
+              <div className="relative">
+                <div
+                  className={`w-full border rounded-md cursor-pointer bg-white ${
+                    isClubsDropdownOpen
+                      ? "border-black ring-2 ring-black"
+                      : "border-[#d1d5db] hover:border-gray-400"
+                  }`}
+                  onClick={() => setIsClubsDropdownOpen(!isClubsDropdownOpen)}
+                >
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span
+                      className={`text-sm ${
+                        formData.clubsAligned &&
+                        formData.clubsAligned !== "Not Applicable"
+                          ? "text-[#1f2937]"
+                          : "text-[#9ca3af]"
+                      }`}
+                    >
+                      {formData.clubsAligned || "Select Club"}
+                    </span>
+                    <svg
+                      className={`h-4 w-4 text-gray-500 transition-transform ${
+                        isClubsDropdownOpen ? "rotate-180" : ""
+                      }`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 9l-7 7-7-7"
+                      />
+                    </svg>
+                  </div>
+                </div>
+                {isClubsDropdownOpen && (
+                  <div className="absolute z-50 mt-1 w-full bg-white border-2 border-black rounded-md shadow-xl max-h-60 overflow-hidden">
+                    <div className="sticky top-0 bg-white border-b border-gray-200 p-2">
+                      <input
+                        type="text"
+                        value={clubsSearchTerm}
+                        onChange={(e) => setClubsSearchTerm(e.target.value)}
+                        placeholder="Search clubs..."
+                        className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:border-black focus:ring-1 focus:ring-black"
+                        onClick={(e) => e.stopPropagation()}
+                        autoFocus
+                      />
+                    </div>
+                    <div className="overflow-auto max-h-48">
+                      {filteredClubs.map((club) => (
+                        <div
+                          key={club}
+                          className={`px-3 py-2 text-sm cursor-pointer transition-colors ${
+                            formData.clubsAligned === club
+                              ? "bg-blue-50 text-blue-700 font-medium"
+                              : "text-gray-700 hover:bg-gray-100"
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFormData({ ...formData, clubsAligned: club });
+                            setIsClubsDropdownOpen(false);
+                            setClubsSearchTerm("");
+                          }}
+                        >
+                          {club}
+                        </div>
+                      ))}
+                      {filteredClubs.length === 0 && (
+                        <div className="px-3 py-2 text-sm text-gray-400 italic">
+                          No clubs found
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-[#4b5563] mb-1">
@@ -1095,6 +1221,98 @@ export default function EMoUForm({
                       {filteredIeeeSocieties.length === 0 && (
                         <div className="px-3 py-2 text-sm text-gray-400 italic">
                           No societies found
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* IEEE Community - Searchable Dropdown */}
+            <div className="col-span-2" ref={ieeeCommunityDropdownRef}>
+              <label className="block text-xs font-medium text-[#4b5563] mb-1">
+                IEEE Community
+              </label>
+              <div className="relative">
+                <div
+                  className={`w-full border rounded-md cursor-pointer bg-white ${
+                    isIeeeCommunityDropdownOpen
+                      ? "border-black ring-2 ring-black"
+                      : "border-[#d1d5db] hover:border-gray-400"
+                  }`}
+                  onClick={() =>
+                    setIsIeeeCommunityDropdownOpen(!isIeeeCommunityDropdownOpen)
+                  }
+                >
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span
+                      className={`text-sm ${
+                        formData.ieeeCommunity &&
+                        formData.ieeeCommunity !== "Not Applicable"
+                          ? "text-[#1f2937]"
+                          : "text-[#9ca3af]"
+                      }`}
+                    >
+                      {formData.ieeeCommunity || "Select IEEE Community"}
+                    </span>
+                    <svg
+                      className={`h-4 w-4 text-gray-500 transition-transform ${
+                        isIeeeCommunityDropdownOpen ? "rotate-180" : ""
+                      }`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 9l-7 7-7-7"
+                      />
+                    </svg>
+                  </div>
+                </div>
+                {isIeeeCommunityDropdownOpen && (
+                  <div className="absolute z-50 mt-1 w-full bg-white border-2 border-black rounded-md shadow-xl max-h-60 overflow-hidden">
+                    <div className="sticky top-0 bg-white border-b border-gray-200 p-2">
+                      <input
+                        type="text"
+                        value={ieeeCommunitySearchTerm}
+                        onChange={(e) =>
+                          setIeeeCommunitySearchTerm(e.target.value)
+                        }
+                        placeholder="Search communities..."
+                        className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:border-black focus:ring-1 focus:ring-black"
+                        onClick={(e) => e.stopPropagation()}
+                        autoFocus
+                      />
+                    </div>
+                    <div className="overflow-auto max-h-48">
+                      {filteredIeeeCommunities.map((community) => (
+                        <div
+                          key={community}
+                          className={`px-3 py-2 text-sm cursor-pointer transition-colors ${
+                            formData.ieeeCommunity === community
+                              ? "bg-blue-50 text-blue-700 font-medium"
+                              : "text-gray-700 hover:bg-gray-100"
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFormData({
+                              ...formData,
+                              ieeeCommunity: community,
+                            });
+                            setIsIeeeCommunityDropdownOpen(false);
+                            setIeeeCommunitySearchTerm("");
+                          }}
+                        >
+                          {community}
+                        </div>
+                      ))}
+                      {filteredIeeeCommunities.length === 0 && (
+                        <div className="px-3 py-2 text-sm text-gray-400 italic">
+                          No communities found
                         </div>
                       )}
                     </div>

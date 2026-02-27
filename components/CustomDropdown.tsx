@@ -204,6 +204,7 @@ export default function CustomDropdown({
       {isOpen && (
         <div
           ref={optionsRef}
+          onMouseDown={(e) => e.stopPropagation()}
           className="
             absolute z-50 mt-1 w-full min-w-[160px]
             bg-white border-2 border-black rounded-md shadow-xl
@@ -365,6 +366,7 @@ export function CellDropdown({
       {/* Dropdown Options - fixed positioned to break out of table stacking context */}
       <div
         ref={optionsRef}
+        onMouseDown={(e) => e.stopPropagation()}
         className="
           fixed z-[10000] min-w-[180px]
           bg-white border-2 border-black rounded-lg shadow-xl
@@ -535,6 +537,7 @@ export function SearchableCellDropdown({
   return (
     <div ref={dropdownRef} className="relative z-[10000]">
       <div
+        onMouseDown={(e) => e.stopPropagation()}
         className="fixed z-[10000] min-w-[280px] bg-white border-2 border-black rounded-lg shadow-xl max-h-[300px] overflow-hidden flex flex-col"
         style={{ top: `${position.top}px`, left: `${position.left}px` }}
       >
@@ -551,7 +554,8 @@ export function SearchableCellDropdown({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search..."
-              className="w-full pl-7 pr-2 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:border-black focus:ring-1 focus:ring-black"
+              className="w-full pr-2 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:border-black focus:ring-1 focus:ring-black"
+              style={{ paddingLeft: "1.75rem" }}
               onClick={(e) => e.stopPropagation()}
             />
           </div>
@@ -689,6 +693,7 @@ export function MultiSelectCellDropdown({
   return (
     <div ref={dropdownRef} className="relative z-[10000]">
       <div
+        onMouseDown={(e) => e.stopPropagation()}
         className="fixed z-[10000] min-w-[300px] bg-white border-2 border-black rounded-lg shadow-xl max-h-[360px] overflow-hidden flex flex-col"
         style={{ top: `${position.top}px`, left: `${position.left}px` }}
       >

@@ -10,27 +10,18 @@ import {
 import {
   User as FirebaseUser,
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
-  updateProfile,
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { getUser, createUser as createUserInDb } from "@/lib/firestore";
-import { User, UserRole } from "@/types";
+import { getUser } from "@/lib/firestore";
+import { User } from "@/types";
 
 interface AuthContextType {
   user: User | null;
   firebaseUser: FirebaseUser | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (
-    email: string,
-    password: string,
-    displayName: string,
-    role: UserRole,
-    department?: string,
-  ) => Promise<void>;
   signOut: () => Promise<void>;
   canEdit: (recordCreatorUid: string, recordDepartment: string) => boolean;
   canDelete: () => boolean;
@@ -82,32 +73,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signInWithEmailAndPassword(auth, email, password);
   };
 
-  const signUp = async (
-    email: string,
-    password: string,
-    displayName: string,
-    role: UserRole,
-    department?: string,
-  ) => {
-    const userCredential = await createUserWithEmailAndPassword(
-      auth,
-      email,
-      password,
-    );
-    await updateProfile(userCredential.user, { displayName });
-
-    // Create user document in Firestore
-    const now = new Date();
-    await createUserInDb(userCredential.user.uid, {
-      email,
-      displayName,
-      role,
-      department,
-      createdAt: now,
-      updatedAt: now,
-    });
-  };
-
   const signOut = async () => {
     await firebaseSignOut(auth);
   };
@@ -149,7 +114,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     firebaseUser,
     loading,
     signIn,
-    signUp,
     signOut,
     canEdit,
     canDelete,
