@@ -3,6 +3,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { PageTableSkeleton } from "./SkeletonLoading";
 
 export default function ProtectedRoute({
   children,
@@ -20,10 +21,13 @@ export default function ProtectedRoute({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-sm text-gray-600">Loading...</p>
+      <div className="min-h-screen bg-[#f8f9fa]">
+        <div className="bg-white border-b border-[#d1d5db] px-6 py-3">
+          <div className="h-6 w-48 bg-gray-200 rounded animate-pulse"></div>
+          <div className="h-3 w-64 bg-gray-200 rounded animate-pulse mt-1"></div>
+        </div>
+        <div className="p-6">
+          <PageTableSkeleton rows={15} columns={8} summaryCardCount={7} />
         </div>
       </div>
     );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Alert from "@/components/Alert";
@@ -42,6 +42,7 @@ import {
   FiChevronDown,
 } from "react-icons/fi";
 import { MdDashboard, MdAdminPanelSettings } from "react-icons/md";
+import { PageTableSkeleton } from "@/components/SkeletonLoading";
 
 /**
  * Helper function to get sticky column positioning styles based on user role
@@ -136,6 +137,7 @@ function HomePage() {
     field: "hodApprovalDoc" | "signedAgreementDoc";
   } | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const savingRef = useRef(false);
 
   // Stats state for server-side calculation
   const [stats, setStats] = useState({
@@ -211,16 +213,30 @@ function HomePage() {
       const isSelectElement =
         target.tagName === "SELECT" || target.closest("select");
       const isSelectOption = target.tagName === "OPTION";
+      // Also check for custom dropdown elements
+      const isDropdown =
+        target.closest('[role="listbox"]') ||
+        target.closest("[data-dropdown]") ||
+        target.closest("[data-cell-dropdown]");
 
-      // If clicking outside editing cell (and not on a date input or select), auto-save
+      // If clicking outside editing cell (and not on interactive elements), auto-save
       if (
         !isEditableCell &&
         !isDateInput &&
         !isWithinDateInput &&
         !isSelectElement &&
-        !isSelectOption
+        !isSelectOption &&
+        !isDropdown
       ) {
-        saveInlineEdit();
+        // For text cells, read the current DOM content directly (mousedown fires before onBlur)
+        const editableEl = document.querySelector('[contenteditable="true"]');
+        if (editableEl) {
+          const field = editingCell.field as keyof EMoURecord;
+          const currentText = editableEl.textContent || "";
+          saveFieldDirectly(field, currentText);
+        } else {
+          saveInlineEdit();
+        }
       }
     };
 
@@ -633,32 +649,50 @@ function HomePage() {
   };
 
   const saveInlineEdit = async () => {
-    if (!editingCell || !user) return;
+    if (!editingCell || !user || savingRef.current) return;
+    savingRef.current = true;
 
     try {
-      const updatedData = {
-        ...inlineEditData,
+      const field = editingCell.field as keyof EMoURecord;
+      const value = inlineEditData[field];
+      const recordId = editingCell.recordId;
+
+      // Only send the changed field + audit info
+      const updatedData: Partial<EMoURecord> = {
+        [field]: value,
         updatedBy: user.uid,
         updatedByName: user.displayName,
         updatedAt: new Date(),
       };
 
-      await updateEMoU(editingCell.recordId, updatedData);
+      // Include auto-computed fields if applicable
+      if (
+        inlineEditData.status !== undefined &&
+        (field === "toDate" || field === "fromDate")
+      ) {
+        updatedData.status = inlineEditData.status;
+      }
+      if (inlineEditData.department !== undefined && field === "maintainedBy") {
+        updatedData.department = inlineEditData.department;
+      }
 
-      // Update local state instead of reloading from database
+      // Optimistic update FIRST for smooth UI
       setRecords((prevRecords) =>
         prevRecords.map((record) =>
-          record.id === editingCell.recordId
-            ? { ...record, ...updatedData }
-            : record,
+          record.id === recordId ? { ...record, ...updatedData } : record,
         ),
       );
-
       setEditingCell(null);
       setInlineEditData({});
+
+      await updateEMoU(recordId, updatedData);
     } catch (error) {
       console.error("Failed to update record:", error);
       setAlert({ message: "Failed to update record", type: "error" });
+      // Reload to restore correct state on error
+      loadRecords();
+    } finally {
+      savingRef.current = false;
     }
   };
 
@@ -667,17 +701,22 @@ function HomePage() {
     field: keyof EMoURecord,
     value: string | number,
   ) => {
-    if (!editingCell || !user) return;
+    if (!editingCell || !user || savingRef.current) return;
+    savingRef.current = true;
+
+    const recordId = editingCell.recordId;
 
     try {
-      const updates: Partial<EMoURecord> = {
-        ...inlineEditData,
+      // Only send the changed field (not the entire record)
+      const updatedData: Partial<EMoURecord> = {
         [field]: value,
+        updatedBy: user.uid,
+        updatedByName: user.displayName,
+        updatedAt: new Date(),
       };
 
-      // Auto-update status when toDate changes (main page only shows approved records)
+      // Auto-update status when toDate changes
       if (field === "toDate" && typeof value === "string") {
-        // Check for perpetual text or large year dates
         const parts = value.split(".");
         const isLargeYear =
           parts.length === 3 && parseInt(parts[2], 10) >= 9000;
@@ -687,7 +726,7 @@ function HomePage() {
           value.toLowerCase().includes("indefinite") ||
           isLargeYear
         ) {
-          updates.status = "Active";
+          updatedData.status = "Active";
         } else {
           try {
             const [day, month, year] = value.split(".").map(Number);
@@ -695,11 +734,7 @@ function HomePage() {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             toDate.setHours(0, 0, 0, 0);
-            if (toDate >= today) {
-              updates.status = "Active";
-            } else {
-              updates.status = "Expired";
-            }
+            updatedData.status = toDate >= today ? "Active" : "Expired";
           } catch {
             // Keep current status if date parsing fails
           }
@@ -709,38 +744,31 @@ function HomePage() {
       // Auto-update department when maintainedBy changes
       if (field === "maintainedBy" && typeof value === "string") {
         if (value === "Institution" || value === "Incubation") {
-          updates.department = value;
+          updatedData.department = value;
         } else if (value === "Departments") {
-          // If department is currently Institution/Incubation, reset to first department
           const currentDept = (inlineEditData.department as string) || "";
           if (currentDept === "Institution" || currentDept === "Incubation") {
-            updates.department = "CSE";
+            updatedData.department = "CSE";
           }
         }
       }
 
-      const updatedData = {
-        ...updates,
-        updatedBy: user.uid,
-        updatedByName: user.displayName,
-        updatedAt: new Date(),
-      };
-
-      await updateEMoU(editingCell.recordId, updatedData);
-
+      // Optimistic update FIRST for smooth UI
       setRecords((prevRecords) =>
         prevRecords.map((record) =>
-          record.id === editingCell.recordId
-            ? { ...record, ...updatedData }
-            : record,
+          record.id === recordId ? { ...record, ...updatedData } : record,
         ),
       );
-
       setEditingCell(null);
       setInlineEditData({});
+
+      await updateEMoU(recordId, updatedData);
     } catch (error) {
       console.error("Failed to update record:", error);
       setAlert({ message: "Failed to update record", type: "error" });
+      loadRecords();
+    } finally {
+      savingRef.current = false;
     }
   };
 
@@ -1269,12 +1297,7 @@ function HomePage() {
         {/* Main Content */}
         <div className="p-6">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="mt-4 text-sm text-gray-600">Loading records...</p>
-              </div>
-            </div>
+            <PageTableSkeleton rows={15} columns={8} summaryCardCount={7} />
           ) : (
             <>
               {/* Summary Cards */}
@@ -1621,7 +1644,7 @@ function HomePage() {
                               }
                               onBlur={(e) => {
                                 if (isEditing) {
-                                  handleInlineFieldChange(
+                                  saveFieldDirectly(
                                     field,
                                     e.currentTarget.textContent || "",
                                   );
@@ -2066,7 +2089,7 @@ function HomePage() {
                                   }
                                   onBlur={(e) => {
                                     if (isEditing) {
-                                      handleInlineFieldChange(
+                                      saveFieldDirectly(
                                         "companyWebsite",
                                         e.currentTarget.textContent || "",
                                       );

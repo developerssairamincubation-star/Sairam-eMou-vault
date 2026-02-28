@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Alert from "@/components/Alert";
@@ -40,6 +40,7 @@ import {
   FiChevronDown,
   FiTrash2,
 } from "react-icons/fi";
+import { UserTableSkeleton } from "@/components/SkeletonLoading";
 
 function AdminPage() {
   const { user: currentUser, loading: authLoading } = useAuth();
@@ -84,6 +85,7 @@ function AdminPage() {
     field: string;
   } | null>(null);
   const [inlineEditData, setInlineEditData] = useState<Partial<EMoURecord>>({});
+  const savingRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [scrollStart, setScrollStart] = useState({ left: 0, top: 0 });
@@ -139,16 +141,30 @@ function AdminPage() {
       const isSelectElement =
         target.tagName === "SELECT" || target.closest("select");
       const isSelectOption = target.tagName === "OPTION";
+      // Also check for custom dropdown elements
+      const isDropdown =
+        target.closest('[role="listbox"]') ||
+        target.closest("[data-dropdown]") ||
+        target.closest("[data-cell-dropdown]");
 
-      // If clicking outside editing cell (and not on a date input or select), auto-save
+      // If clicking outside editing cell (and not on interactive elements), auto-save
       if (
         !isEditableCell &&
         !isDateInput &&
         !isWithinDateInput &&
         !isSelectElement &&
-        !isSelectOption
+        !isSelectOption &&
+        !isDropdown
       ) {
-        saveInlineEdit();
+        // For text cells, read the current DOM content directly (mousedown fires before onBlur)
+        const editableEl = document.querySelector('[contenteditable="true"]');
+        if (editableEl) {
+          const field = editingCell.field as keyof EMoURecord;
+          const currentText = editableEl.textContent || "";
+          saveFieldDirectly(field, currentText);
+        } else {
+          saveInlineEdit();
+        }
       }
     };
 
@@ -317,40 +333,50 @@ function AdminPage() {
   };
 
   const saveInlineEdit = async () => {
-    if (!editingCell || !currentUser) return;
+    if (!editingCell || !currentUser || savingRef.current) return;
+    savingRef.current = true;
 
     try {
-      const updatedData = {
-        ...inlineEditData,
+      const field = editingCell.field as keyof EMoURecord;
+      const value = inlineEditData[field];
+      const recordId = editingCell.recordId;
+
+      // Only send the changed field + audit info
+      const updatedData: Partial<EMoURecord> = {
+        [field]: value,
         updatedBy: currentUser.uid,
         updatedByName: currentUser.displayName,
         updatedAt: new Date(),
       };
 
-      await updateEMoU(editingCell.recordId, updatedData);
+      // Include auto-computed fields if applicable
+      if (
+        inlineEditData.status !== undefined &&
+        (field === "toDate" || field === "fromDate")
+      ) {
+        updatedData.status = inlineEditData.status;
+      }
+      if (inlineEditData.department !== undefined && field === "maintainedBy") {
+        updatedData.department = inlineEditData.department;
+      }
 
-      // Update local state
-      setPendingRecords((prev) =>
-        prev.map((r) =>
-          r.id === editingCell.recordId ? { ...r, ...updatedData } : r,
-        ),
-      );
-      setDraftRecords((prev) =>
-        prev.map((r) =>
-          r.id === editingCell.recordId ? { ...r, ...updatedData } : r,
-        ),
-      );
-      setApprovedRecords((prev) =>
-        prev.map((r) =>
-          r.id === editingCell.recordId ? { ...r, ...updatedData } : r,
-        ),
-      );
+      // Optimistic update FIRST
+      const updateRecordArray = (prev: EMoURecord[]) =>
+        prev.map((r) => (r.id === recordId ? { ...r, ...updatedData } : r));
+      setPendingRecords(updateRecordArray);
+      setDraftRecords(updateRecordArray);
+      setApprovedRecords(updateRecordArray);
 
       setEditingCell(null);
       setInlineEditData({});
+
+      await updateEMoU(recordId, updatedData);
     } catch (error) {
       console.error("Failed to update record:", error);
       setAlert({ message: "Failed to update record", type: "error" });
+      loadApprovalRecords();
+    } finally {
+      savingRef.current = false;
     }
   };
 
@@ -364,18 +390,23 @@ function AdminPage() {
     field: keyof EMoURecord,
     value: string | number,
   ) => {
-    if (!editingCell || !currentUser) return;
+    if (!editingCell || !currentUser || savingRef.current) return;
+    savingRef.current = true;
+
+    const recordId = editingCell.recordId;
 
     try {
-      const updates: Partial<EMoURecord> = {
-        ...inlineEditData,
+      // Only send the changed field (not the entire record)
+      const updatedData: Partial<EMoURecord> = {
         [field]: value,
+        updatedBy: currentUser.uid,
+        updatedByName: currentUser.displayName,
+        updatedAt: new Date(),
       };
 
       // Auto-update status when toDate changes
       if (field === "toDate" && typeof value === "string") {
         const dateStr = value.toLowerCase();
-        // Check for perpetual text or large year dates
         const parts = value.split(".");
         const isLargeYear =
           parts.length === 3 && parseInt(parts[2], 10) >= 9000;
@@ -385,9 +416,8 @@ function AdminPage() {
           dateStr === "indefinite" ||
           isLargeYear
         ) {
-          updates.status = "Active" as EMoUStatus;
+          updatedData.status = "Active" as EMoUStatus;
         } else {
-          const parts = value.split(".");
           if (parts.length === 3) {
             const day = parseInt(parts[0], 10);
             const month = parseInt(parts[1], 10) - 1;
@@ -396,9 +426,9 @@ function AdminPage() {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             if (toDate >= today) {
-              updates.status = "Active" as EMoUStatus;
+              updatedData.status = "Active" as EMoUStatus;
             } else {
-              updates.status = "Expired" as EMoUStatus;
+              updatedData.status = "Expired" as EMoUStatus;
             }
           }
         }
@@ -407,45 +437,32 @@ function AdminPage() {
       // Auto-update department when maintainedBy changes
       if (field === "maintainedBy" && typeof value === "string") {
         if (value === "Institution" || value === "Incubation") {
-          updates.department = value as DepartmentCode;
+          updatedData.department = value as DepartmentCode;
         } else if (value === "Departments") {
           const currentDept = (inlineEditData.department as string) || "";
           if (currentDept === "Institution" || currentDept === "Incubation") {
-            updates.department = "CSE" as DepartmentCode;
+            updatedData.department = "CSE" as DepartmentCode;
           }
         }
       }
 
-      const updatedData = {
-        ...updates,
-        updatedBy: currentUser.uid,
-        updatedByName: currentUser.displayName,
-        updatedAt: new Date(),
-      };
-
-      await updateEMoU(editingCell.recordId, updatedData);
-
-      setPendingRecords((prev) =>
-        prev.map((r) =>
-          r.id === editingCell.recordId ? { ...r, ...updatedData } : r,
-        ),
-      );
-      setDraftRecords((prev) =>
-        prev.map((r) =>
-          r.id === editingCell.recordId ? { ...r, ...updatedData } : r,
-        ),
-      );
-      setApprovedRecords((prev) =>
-        prev.map((r) =>
-          r.id === editingCell.recordId ? { ...r, ...updatedData } : r,
-        ),
-      );
+      // Optimistic update FIRST for smooth UI
+      const updateRecordArray = (prev: EMoURecord[]) =>
+        prev.map((r) => (r.id === recordId ? { ...r, ...updatedData } : r));
+      setPendingRecords(updateRecordArray);
+      setDraftRecords(updateRecordArray);
+      setApprovedRecords(updateRecordArray);
 
       setEditingCell(null);
       setInlineEditData({});
+
+      await updateEMoU(recordId, updatedData);
     } catch (error) {
       console.error("Failed to update record:", error);
       setAlert({ message: "Failed to update record", type: "error" });
+      loadApprovalRecords();
+    } finally {
+      savingRef.current = false;
     }
   };
 
@@ -995,7 +1012,7 @@ function AdminPage() {
           onClick={() => handleCellClick(record, field)}
           onBlur={(e) => {
             if (isEditing) {
-              handleInlineFieldChange(field, e.currentTarget.textContent || "");
+              saveFieldDirectly(field, e.currentTarget.textContent || "");
             }
           }}
           style={cellStyle}
@@ -1415,7 +1432,7 @@ function AdminPage() {
                           }
                           onBlur={(e) => {
                             if (isEditing) {
-                              handleInlineFieldChange(
+                              saveFieldDirectly(
                                 "companyWebsite",
                                 e.currentTarget.textContent || "",
                               );
@@ -2532,11 +2549,7 @@ function AdminPage() {
                     </thead>
                     <tbody>
                       {loading ? (
-                        <tr key="loading">
-                          <td colSpan={7} className="text-center py-8">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                          </td>
-                        </tr>
+                        <UserTableSkeleton rows={5} />
                       ) : users.length === 0 ? (
                         <tr key="empty">
                           <td
