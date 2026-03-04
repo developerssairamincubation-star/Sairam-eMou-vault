@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Alert from "@/components/Alert";
@@ -27,6 +27,7 @@ import {
 import { getAllUsers, getEMoUs, updateEMoU, deleteEMoU } from "@/lib/firestore";
 import { calculateStatusFromToDate } from "@/lib/sheetsUtils";
 import { uploadToCloudinary, deleteFromCloudinary } from "@/lib/cloudinary";
+import * as XLSX from "xlsx";
 import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
 import {
@@ -39,7 +40,9 @@ import {
   FiCalendar,
   FiChevronDown,
   FiTrash2,
+  FiDownload,
 } from "react-icons/fi";
+import { UserTableSkeleton } from "@/components/SkeletonLoading";
 
 function AdminPage() {
   const { user: currentUser, loading: authLoading } = useAuth();
@@ -84,6 +87,7 @@ function AdminPage() {
     field: string;
   } | null>(null);
   const [inlineEditData, setInlineEditData] = useState<Partial<EMoURecord>>({});
+  const savingRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [scrollStart, setScrollStart] = useState({ left: 0, top: 0 });
@@ -139,16 +143,30 @@ function AdminPage() {
       const isSelectElement =
         target.tagName === "SELECT" || target.closest("select");
       const isSelectOption = target.tagName === "OPTION";
+      // Also check for custom dropdown elements
+      const isDropdown =
+        target.closest('[role="listbox"]') ||
+        target.closest("[data-dropdown]") ||
+        target.closest("[data-cell-dropdown]");
 
-      // If clicking outside editing cell (and not on a date input or select), auto-save
+      // If clicking outside editing cell (and not on interactive elements), auto-save
       if (
         !isEditableCell &&
         !isDateInput &&
         !isWithinDateInput &&
         !isSelectElement &&
-        !isSelectOption
+        !isSelectOption &&
+        !isDropdown
       ) {
-        saveInlineEdit();
+        // For text cells, read the current DOM content directly (mousedown fires before onBlur)
+        const editableEl = document.querySelector('[contenteditable="true"]');
+        if (editableEl) {
+          const field = editingCell.field as keyof EMoURecord;
+          const currentText = editableEl.textContent || "";
+          saveFieldDirectly(field, currentText);
+        } else {
+          saveInlineEdit();
+        }
       }
     };
 
@@ -317,40 +335,50 @@ function AdminPage() {
   };
 
   const saveInlineEdit = async () => {
-    if (!editingCell || !currentUser) return;
+    if (!editingCell || !currentUser || savingRef.current) return;
+    savingRef.current = true;
 
     try {
-      const updatedData = {
-        ...inlineEditData,
+      const field = editingCell.field as keyof EMoURecord;
+      const value = inlineEditData[field];
+      const recordId = editingCell.recordId;
+
+      // Only send the changed field + audit info
+      const updatedData: Partial<EMoURecord> = {
+        [field]: value,
         updatedBy: currentUser.uid,
         updatedByName: currentUser.displayName,
         updatedAt: new Date(),
       };
 
-      await updateEMoU(editingCell.recordId, updatedData);
+      // Include auto-computed fields if applicable
+      if (
+        inlineEditData.status !== undefined &&
+        (field === "toDate" || field === "fromDate")
+      ) {
+        updatedData.status = inlineEditData.status;
+      }
+      if (inlineEditData.department !== undefined && field === "maintainedBy") {
+        updatedData.department = inlineEditData.department;
+      }
 
-      // Update local state
-      setPendingRecords((prev) =>
-        prev.map((r) =>
-          r.id === editingCell.recordId ? { ...r, ...updatedData } : r,
-        ),
-      );
-      setDraftRecords((prev) =>
-        prev.map((r) =>
-          r.id === editingCell.recordId ? { ...r, ...updatedData } : r,
-        ),
-      );
-      setApprovedRecords((prev) =>
-        prev.map((r) =>
-          r.id === editingCell.recordId ? { ...r, ...updatedData } : r,
-        ),
-      );
+      // Optimistic update FIRST
+      const updateRecordArray = (prev: EMoURecord[]) =>
+        prev.map((r) => (r.id === recordId ? { ...r, ...updatedData } : r));
+      setPendingRecords(updateRecordArray);
+      setDraftRecords(updateRecordArray);
+      setApprovedRecords(updateRecordArray);
 
       setEditingCell(null);
       setInlineEditData({});
+
+      await updateEMoU(recordId, updatedData);
     } catch (error) {
       console.error("Failed to update record:", error);
       setAlert({ message: "Failed to update record", type: "error" });
+      loadApprovalRecords();
+    } finally {
+      savingRef.current = false;
     }
   };
 
@@ -364,18 +392,23 @@ function AdminPage() {
     field: keyof EMoURecord,
     value: string | number,
   ) => {
-    if (!editingCell || !currentUser) return;
+    if (!editingCell || !currentUser || savingRef.current) return;
+    savingRef.current = true;
+
+    const recordId = editingCell.recordId;
 
     try {
-      const updates: Partial<EMoURecord> = {
-        ...inlineEditData,
+      // Only send the changed field (not the entire record)
+      const updatedData: Partial<EMoURecord> = {
         [field]: value,
+        updatedBy: currentUser.uid,
+        updatedByName: currentUser.displayName,
+        updatedAt: new Date(),
       };
 
       // Auto-update status when toDate changes
       if (field === "toDate" && typeof value === "string") {
         const dateStr = value.toLowerCase();
-        // Check for perpetual text or large year dates
         const parts = value.split(".");
         const isLargeYear =
           parts.length === 3 && parseInt(parts[2], 10) >= 9000;
@@ -385,9 +418,8 @@ function AdminPage() {
           dateStr === "indefinite" ||
           isLargeYear
         ) {
-          updates.status = "Active" as EMoUStatus;
+          updatedData.status = "Active" as EMoUStatus;
         } else {
-          const parts = value.split(".");
           if (parts.length === 3) {
             const day = parseInt(parts[0], 10);
             const month = parseInt(parts[1], 10) - 1;
@@ -396,9 +428,9 @@ function AdminPage() {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             if (toDate >= today) {
-              updates.status = "Active" as EMoUStatus;
+              updatedData.status = "Active" as EMoUStatus;
             } else {
-              updates.status = "Expired" as EMoUStatus;
+              updatedData.status = "Expired" as EMoUStatus;
             }
           }
         }
@@ -407,45 +439,32 @@ function AdminPage() {
       // Auto-update department when maintainedBy changes
       if (field === "maintainedBy" && typeof value === "string") {
         if (value === "Institution" || value === "Incubation") {
-          updates.department = value as DepartmentCode;
+          updatedData.department = value as DepartmentCode;
         } else if (value === "Departments") {
           const currentDept = (inlineEditData.department as string) || "";
           if (currentDept === "Institution" || currentDept === "Incubation") {
-            updates.department = "CSE" as DepartmentCode;
+            updatedData.department = "CSE" as DepartmentCode;
           }
         }
       }
 
-      const updatedData = {
-        ...updates,
-        updatedBy: currentUser.uid,
-        updatedByName: currentUser.displayName,
-        updatedAt: new Date(),
-      };
-
-      await updateEMoU(editingCell.recordId, updatedData);
-
-      setPendingRecords((prev) =>
-        prev.map((r) =>
-          r.id === editingCell.recordId ? { ...r, ...updatedData } : r,
-        ),
-      );
-      setDraftRecords((prev) =>
-        prev.map((r) =>
-          r.id === editingCell.recordId ? { ...r, ...updatedData } : r,
-        ),
-      );
-      setApprovedRecords((prev) =>
-        prev.map((r) =>
-          r.id === editingCell.recordId ? { ...r, ...updatedData } : r,
-        ),
-      );
+      // Optimistic update FIRST for smooth UI
+      const updateRecordArray = (prev: EMoURecord[]) =>
+        prev.map((r) => (r.id === recordId ? { ...r, ...updatedData } : r));
+      setPendingRecords(updateRecordArray);
+      setDraftRecords(updateRecordArray);
+      setApprovedRecords(updateRecordArray);
 
       setEditingCell(null);
       setInlineEditData({});
+
+      await updateEMoU(recordId, updatedData);
     } catch (error) {
       console.error("Failed to update record:", error);
       setAlert({ message: "Failed to update record", type: "error" });
+      loadApprovalRecords();
+    } finally {
+      savingRef.current = false;
     }
   };
 
@@ -879,6 +898,226 @@ function AdminPage() {
     }
   };
 
+  const generateCSV = (data: EMoURecord[]) => {
+    const headers = [
+      "ID",
+      "Department",
+      "Company Name",
+      "From Date",
+      "To Date",
+      "Status",
+      "Scope",
+      "Maintained By",
+      "Approval Status",
+      "Description",
+      "Company Website",
+      "About Company",
+      "Company Address",
+      "Industry Contact Name",
+      "Industry Contact Mobile",
+      "Industry Contact Email",
+      "Institution Contact Name",
+      "Institution Contact Mobile",
+      "Institution Contact Email",
+      "Clubs Aligned",
+      "SDG Goals",
+      "Skills & Technologies",
+      "Per Student Cost",
+      "Placement Opportunity",
+      "Internship Opportunity",
+      "Going For Renewal",
+      "Benefits Achieved",
+      "Document Availability",
+      "IEEE Society",
+      "IEEE Community",
+      "EMoU Outcome",
+      "Domain",
+      "Created By",
+      "Created At",
+    ];
+
+    const escapeCSV = (value: string | number | undefined | null) => {
+      const str = String(value ?? "");
+      if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const rows = data.map((r) => [
+      r.id,
+      r.department,
+      r.companyName,
+      r.fromDate,
+      r.toDate,
+      r.status,
+      r.scope,
+      r.maintainedBy,
+      r.approvalStatus,
+      r.description,
+      r.companyWebsite || "",
+      r.aboutCompany || "",
+      r.companyAddress || "",
+      r.industryContactName || "",
+      r.industryContactMobile || "",
+      r.industryContactEmail || "",
+      r.institutionContactName || "",
+      r.institutionContactMobile || "",
+      r.institutionContactEmail || "",
+      r.clubsAligned || "",
+      r.sdgGoals || "",
+      r.skillsTechnologies || "",
+      r.perStudentCost ?? "",
+      r.placementOpportunity ?? "",
+      r.internshipOpportunity ?? "",
+      r.goingForRenewal,
+      r.benefitsAchieved || "",
+      r.documentAvailability,
+      r.ieeeSociety || "",
+      r.ieeeCommunity || "",
+      r.emouOutcome || "",
+      r.domain || "",
+      r.createdByName,
+      r.createdAt instanceof Date
+        ? r.createdAt.toLocaleDateString()
+        : String(r.createdAt),
+    ]);
+
+    return [
+      headers.map(escapeCSV).join(","),
+      ...rows.map((row) => row.map(escapeCSV).join(",")),
+    ].join("\n");
+  };
+
+  const downloadCSV = (csv: string, filename: string) => {
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleExportSection = (
+    records: EMoURecord[],
+    sectionName: string,
+    format: "csv" | "xlsx" = "csv",
+  ) => {
+    if (records.length === 0) {
+      setAlert({
+        message: `No ${sectionName} records to export`,
+        type: "warning",
+      });
+      return;
+    }
+    try {
+      const timestamp = new Date().toISOString().split("T")[0];
+      if (format === "xlsx") {
+        const exportData = records.map((r, index) => ({
+          "S.No": index + 1,
+          ID: r.id,
+          Department: r.department,
+          "Company Name": r.companyName,
+          "From Date": r.fromDate,
+          "To Date": r.toDate,
+          Status: r.status,
+          Scope: r.scope || "National",
+          "Maintained By": r.maintainedBy || "Departments",
+          "Approval Status": r.approvalStatus,
+          Description: r.description || "",
+          "About Company": r.aboutCompany || "",
+          "Company Address": r.companyAddress || "",
+          "Company Website": r.companyWebsite || "",
+          "Industry Contact Name": r.industryContactName || "",
+          "Industry Contact Mobile": r.industryContactMobile || "",
+          "Industry Contact Email": r.industryContactEmail || "",
+          "Institution Contact Name": r.institutionContactName || "",
+          "Institution Contact Mobile": r.institutionContactMobile || "",
+          "Institution Contact Email": r.institutionContactEmail || "",
+          "Clubs Aligned": r.clubsAligned || "",
+          "SDG Goals": r.sdgGoals || "",
+          "Skills/Technologies": r.skillsTechnologies || "",
+          "Per Student Cost": r.perStudentCost ?? "",
+          "Placement Opportunities": r.placementOpportunity ?? "",
+          "Internship Opportunities": r.internshipOpportunity ?? "",
+          "Going For Renewal": r.goingForRenewal,
+          "Benefits Achieved": r.benefitsAchieved || "",
+          "Document Availability": r.documentAvailability,
+          "IEEE Society": r.ieeeSociety || "",
+          "IEEE Community": r.ieeeCommunity || "",
+          "EMoU Outcome": r.emouOutcome || "",
+          Domain: r.domain || "",
+          "Created By": r.createdByName,
+          "Created At":
+            r.createdAt instanceof Date
+              ? r.createdAt.toLocaleDateString()
+              : String(r.createdAt),
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(exportData);
+        worksheet["!cols"] = [
+          { wch: 6 }, // S.No
+          { wch: 12 }, // ID
+          { wch: 12 }, // Department
+          { wch: 25 }, // Company Name
+          { wch: 12 }, // From Date
+          { wch: 12 }, // To Date
+          { wch: 15 }, // Status
+          { wch: 12 }, // Scope
+          { wch: 15 }, // Maintained By
+          { wch: 14 }, // Approval Status
+          { wch: 40 }, // Description
+          { wch: 30 }, // About Company
+          { wch: 30 }, // Company Address
+          { wch: 25 }, // Company Website
+          { wch: 20 }, // Industry Contact Name
+          { wch: 15 }, // Industry Contact Mobile
+          { wch: 25 }, // Industry Contact Email
+          { wch: 20 }, // Institution Contact Name
+          { wch: 15 }, // Institution Contact Mobile
+          { wch: 25 }, // Institution Contact Email
+          { wch: 20 }, // Clubs Aligned
+          { wch: 20 }, // SDG Goals
+          { wch: 30 }, // Skills/Technologies
+          { wch: 12 }, // Per Student Cost
+          { wch: 18 }, // Placement Opportunities
+          { wch: 18 }, // Internship Opportunities
+          { wch: 15 }, // Going For Renewal
+          { wch: 30 }, // Benefits Achieved
+          { wch: 18 }, // Document Availability
+          { wch: 25 }, // IEEE Society
+          { wch: 25 }, // IEEE Community
+          { wch: 25 }, // EMoU Outcome
+          { wch: 20 }, // Domain
+          { wch: 20 }, // Created By
+          { wch: 15 }, // Created At
+        ];
+
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(
+          workbook,
+          worksheet,
+          `${sectionName} Records`,
+        );
+        XLSX.writeFile(
+          workbook,
+          `emou-${sectionName.toLowerCase()}-${timestamp}.xlsx`,
+        );
+      } else {
+        const csv = generateCSV(records);
+        downloadCSV(csv, `emou-${sectionName.toLowerCase()}-${timestamp}.csv`);
+      }
+      setAlert({
+        message: `Exported ${records.length} ${sectionName} record(s) as ${format.toUpperCase()}!`,
+        type: "success",
+      });
+    } catch (error) {
+      console.error("Export failed:", error);
+      setAlert({ message: "Failed to export records", type: "error" });
+    }
+  };
+
   // Render comprehensive table with all fields
   const renderRecordTable = (
     records: EMoURecord[],
@@ -995,7 +1234,7 @@ function AdminPage() {
           onClick={() => handleCellClick(record, field)}
           onBlur={(e) => {
             if (isEditing) {
-              handleInlineFieldChange(field, e.currentTarget.textContent || "");
+              saveFieldDirectly(field, e.currentTarget.textContent || "");
             }
           }}
           style={cellStyle}
@@ -1415,7 +1654,7 @@ function AdminPage() {
                           }
                           onBlur={(e) => {
                             if (isEditing) {
-                              handleInlineFieldChange(
+                              saveFieldDirectly(
                                 "companyWebsite",
                                 e.currentTarget.textContent || "",
                               );
@@ -2532,11 +2771,7 @@ function AdminPage() {
                     </thead>
                     <tbody>
                       {loading ? (
-                        <tr key="loading">
-                          <td colSpan={7} className="text-center py-8">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                          </td>
-                        </tr>
+                        <UserTableSkeleton rows={5} />
                       ) : users.length === 0 ? (
                         <tr key="empty">
                           <td
@@ -2595,17 +2830,113 @@ function AdminPage() {
 
           {/* Pending Approvals Tab */}
           {activeTab === "pending" && (
-            <div>{renderRecordTable(pendingRecords, true, "pending")}</div>
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-[#1f2937]">
+                    Pending Approvals
+                  </h2>
+                  <p className="text-xs text-[#6b7280] mt-0.5">
+                    {pendingRecords.length} record(s)
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() =>
+                      handleExportSection(pendingRecords, "Pending", "csv")
+                    }
+                    className="btn btn-secondary flex items-center gap-2 text-sm"
+                    disabled={pendingRecords.length === 0}
+                  >
+                    <FiDownload /> CSV
+                  </button>
+                  <button
+                    onClick={() =>
+                      handleExportSection(pendingRecords, "Pending", "xlsx")
+                    }
+                    className="btn btn-secondary flex items-center gap-2 text-sm"
+                    disabled={pendingRecords.length === 0}
+                  >
+                    <FiDownload /> Excel
+                  </button>
+                </div>
+              </div>
+              {renderRecordTable(pendingRecords, true, "pending")}
+            </div>
           )}
 
           {/* Draft Records Tab */}
           {activeTab === "drafts" && (
-            <div>{renderRecordTable(draftRecords, true, "draft")}</div>
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-[#1f2937]">
+                    Draft Records
+                  </h2>
+                  <p className="text-xs text-[#6b7280] mt-0.5">
+                    {draftRecords.length} record(s)
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() =>
+                      handleExportSection(draftRecords, "Drafts", "csv")
+                    }
+                    className="btn btn-secondary flex items-center gap-2 text-sm"
+                    disabled={draftRecords.length === 0}
+                  >
+                    <FiDownload /> CSV
+                  </button>
+                  <button
+                    onClick={() =>
+                      handleExportSection(draftRecords, "Drafts", "xlsx")
+                    }
+                    className="btn btn-secondary flex items-center gap-2 text-sm"
+                    disabled={draftRecords.length === 0}
+                  >
+                    <FiDownload /> Excel
+                  </button>
+                </div>
+              </div>
+              {renderRecordTable(draftRecords, true, "draft")}
+            </div>
           )}
 
           {/* Approved Records Tab */}
           {activeTab === "approved" && (
-            <div>{renderRecordTable(approvedRecords, false, "approved")}</div>
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-[#1f2937]">
+                    Approved Records
+                  </h2>
+                  <p className="text-xs text-[#6b7280] mt-0.5">
+                    {approvedRecords.length} record(s)
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() =>
+                      handleExportSection(approvedRecords, "Approved", "csv")
+                    }
+                    className="btn btn-secondary flex items-center gap-2 text-sm"
+                    disabled={approvedRecords.length === 0}
+                  >
+                    <FiDownload /> CSV
+                  </button>
+                  <button
+                    onClick={() =>
+                      handleExportSection(approvedRecords, "Approved", "xlsx")
+                    }
+                    className="btn btn-secondary flex items-center gap-2 text-sm"
+                    disabled={approvedRecords.length === 0}
+                  >
+                    <FiDownload /> Excel
+                  </button>
+                </div>
+              </div>
+              {renderRecordTable(approvedRecords, false, "approved")}
+            </div>
           )}
         </div>
 

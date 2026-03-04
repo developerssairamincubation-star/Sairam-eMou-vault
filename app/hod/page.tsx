@@ -23,6 +23,7 @@ import { uploadToCloudinary } from "@/lib/cloudinary";
 import { useRouter } from "next/navigation";
 import { FiCalendar, FiChevronDown, FiUpload } from "react-icons/fi";
 import { MdArrowBack } from "react-icons/md";
+import { TabContentSkeleton } from "@/components/SkeletonLoading";
 
 /**
  * Helper function to get sticky column positioning styles based on tab context
@@ -464,10 +465,20 @@ function HODPage() {
         }
       }
 
-      await updateEMoU(editingCell.recordId, updateData);
+      // Optimistic local state update FIRST for smooth UI
+      const updateRecordInList = (records: EMoURecord[]) =>
+        records.map((r) =>
+          r.id === editingCell.recordId ? { ...r, ...updateData } : r,
+        );
+      setDraftRecords(updateRecordInList);
+      setPendingRecords(updateRecordInList);
+      setApprovedRecords(updateRecordInList);
+      setRejectedRecords(updateRecordInList);
+
       setEditingCell(null);
       setInlineEditData({});
-      await loadRecords();
+
+      await updateEMoU(editingCell.recordId, updateData);
     } catch (error) {
       console.error("Failed to update:", error);
       setAlert({ message: "Failed to update record", type: "error" });
@@ -504,10 +515,20 @@ function HODPage() {
         }
       }
 
-      await updateEMoU(editingCell.recordId, updateData);
+      // Optimistic local state update FIRST for smooth UI
+      const updateRecordInList = (records: EMoURecord[]) =>
+        records.map((r) =>
+          r.id === editingCell.recordId ? { ...r, ...updateData } : r,
+        );
+      setDraftRecords(updateRecordInList);
+      setPendingRecords(updateRecordInList);
+      setApprovedRecords(updateRecordInList);
+      setRejectedRecords(updateRecordInList);
+
       setEditingCell(null);
       setInlineEditData({});
-      await loadRecords();
+
+      await updateEMoU(editingCell.recordId, updateData);
     } catch (error) {
       console.error("Failed to update:", error);
       setAlert({ message: "Failed to update record", type: "error" });
@@ -850,7 +871,7 @@ function HODPage() {
                     onClick={() => isEditable && handleCellClick(record, field)}
                     onBlur={(e) => {
                       if (isEditing) {
-                        handleInlineFieldChange(
+                        saveFieldDirectly(
                           field,
                           e.currentTarget.textContent || "",
                         );
@@ -1257,7 +1278,7 @@ function HODPage() {
                         }
                         onBlur={(e) => {
                           if (isEditing) {
-                            handleInlineFieldChange(
+                            saveFieldDirectly(
                               "companyWebsite",
                               e.currentTarget.textContent || "",
                             );
@@ -2088,7 +2109,7 @@ function HODPage() {
                 onClick={() => router.push("/")}
                 className="btn btn-secondary flex items-center"
               >
-               <MdArrowBack className="mr-2" /> Back to eMoUs
+                <MdArrowBack className="mr-2" /> Back to eMoUs
               </button>
             </div>
           </div>
@@ -2181,9 +2202,7 @@ function HODPage() {
                 </p>
               </div>
               {loading ? (
-                <div className="p-8 text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                </div>
+                <TabContentSkeleton rows={10} columns={8} />
               ) : draftRecords.length === 0 ? (
                 <div className="p-8 text-center text-gray-500">
                   No draft records. All records have been submitted for
@@ -2215,9 +2234,7 @@ function HODPage() {
                 </p>
               </div>
               {loading ? (
-                <div className="p-8 text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                </div>
+                <TabContentSkeleton rows={10} columns={8} />
               ) : pendingRecords.length === 0 ? (
                 <div className="p-8 text-center text-gray-500">
                   No pending records
@@ -2248,9 +2265,7 @@ function HODPage() {
                 </p>
               </div>
               {loading ? (
-                <div className="p-8 text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                </div>
+                <TabContentSkeleton rows={10} columns={8} />
               ) : approvedRecords.length === 0 ? (
                 <div className="p-8 text-center text-gray-500">
                   No approved records yet
@@ -2281,9 +2296,7 @@ function HODPage() {
                 </p>
               </div>
               {loading ? (
-                <div className="p-8 text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                </div>
+                <TabContentSkeleton rows={10} columns={8} />
               ) : rejectedRecords.length === 0 ? (
                 <div className="p-8 text-center text-gray-500">
                   No rejected records

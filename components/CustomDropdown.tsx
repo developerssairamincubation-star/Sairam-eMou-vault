@@ -293,10 +293,11 @@ export function CellDropdown({
 
   const handleSelect = useCallback(
     (selectedValue: string) => {
+      // Only call onChange (saveFieldDirectly) - it handles clearing editing state.
+      // Don't call onClose here to avoid double state clearing race condition.
       onChange(selectedValue);
-      onClose();
     },
-    [onChange, onClose],
+    [onChange],
   );
 
   // Handle click outside to close dropdown
@@ -362,7 +363,7 @@ export function CellDropdown({
   }, [highlightedIndex]);
 
   return (
-    <div ref={dropdownRef} className="relative z-[10000]">
+    <div ref={dropdownRef} className="relative z-[10000]" data-cell-dropdown>
       {/* Dropdown Options - fixed positioned to break out of table stacking context */}
       <div
         ref={optionsRef}
@@ -371,6 +372,7 @@ export function CellDropdown({
           fixed z-[10000] min-w-[180px]
           bg-white border-2 border-black rounded-lg shadow-xl
           max-h-[240px] overflow-auto
+          animate-[dropdownIn_0.15s_ease-out]
         "
         style={{
           top: `${position.top}px`,
@@ -391,7 +393,11 @@ export function CellDropdown({
           return (
             <div
               key={option.value}
-              onClick={() => handleSelect(option.value)}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleSelect(option.value);
+              }}
               onMouseEnter={() => setHighlightedIndex(index)}
               className={`
                 flex items-center justify-between gap-2 px-3 py-2
@@ -474,10 +480,11 @@ export function SearchableCellDropdown({
 
   const handleSelect = useCallback(
     (selectedValue: string) => {
+      // Only call onChange (saveFieldDirectly) - it handles clearing editing state.
+      // Don't call onClose here to avoid double state clearing race condition.
       onChange(selectedValue);
-      onClose();
     },
-    [onChange, onClose],
+    [onChange],
   );
 
   useEffect(() => {
@@ -535,10 +542,10 @@ export function SearchableCellDropdown({
   }, [highlightedIndex]);
 
   return (
-    <div ref={dropdownRef} className="relative z-[10000]">
+    <div ref={dropdownRef} className="relative z-[10000]" data-cell-dropdown>
       <div
         onMouseDown={(e) => e.stopPropagation()}
-        className="fixed z-[10000] min-w-[280px] bg-white border-2 border-black rounded-lg shadow-xl max-h-[300px] overflow-hidden flex flex-col"
+        className="fixed z-[10000] min-w-[280px] bg-white border-2 border-black rounded-lg shadow-xl max-h-[300px] overflow-hidden flex flex-col animate-[dropdownIn_0.15s_ease-out]"
         style={{ top: `${position.top}px`, left: `${position.left}px` }}
       >
         {/* Search input */}
@@ -572,7 +579,11 @@ export function SearchableCellDropdown({
             return (
               <div
                 key={option.value}
-                onClick={() => handleSelect(option.value)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleSelect(option.value);
+                }}
                 onMouseEnter={() => setHighlightedIndex(index)}
                 className={`
                   flex items-center justify-between gap-2 px-3 py-2
@@ -691,10 +702,10 @@ export function MultiSelectCellDropdown({
   };
 
   return (
-    <div ref={dropdownRef} className="relative z-[10000]">
+    <div ref={dropdownRef} className="relative z-[10000]" data-cell-dropdown>
       <div
         onMouseDown={(e) => e.stopPropagation()}
-        className="fixed z-[10000] min-w-[300px] bg-white border-2 border-black rounded-lg shadow-xl max-h-[360px] overflow-hidden flex flex-col"
+        className="fixed z-[10000] min-w-[300px] bg-white border-2 border-black rounded-lg shadow-xl max-h-[360px] overflow-hidden flex flex-col animate-[dropdownIn_0.15s_ease-out]"
         style={{ top: `${position.top}px`, left: `${position.left}px` }}
       >
         {/* Header */}
@@ -735,7 +746,11 @@ export function MultiSelectCellDropdown({
             return (
               <div
                 key={option}
-                onClick={() => toggleItem(option)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  toggleItem(option);
+                }}
                 className={`
                   flex items-center justify-between gap-2 px-3 py-2
                   cursor-pointer text-xs transition-colors duration-75
