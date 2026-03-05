@@ -238,11 +238,11 @@ export default function Dashboard() {
       (r) => r.approvalStatus === "draft" || r.approvalStatus === "pending",
     ).length,
     totalPlacement: approvedRecords.reduce(
-      (sum, r) => sum + (r.placementOpportunity || 0),
+      (sum, r) => sum + (Number(r.placementOpportunity) || 0),
       0,
     ),
     totalInternship: approvedRecords.reduce(
-      (sum, r) => sum + (r.internshipOpportunity || 0),
+      (sum, r) => sum + (Number(r.internshipOpportunity) || 0),
       0,
     ),
   };

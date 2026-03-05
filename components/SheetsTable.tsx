@@ -91,7 +91,11 @@ const ACTION_COL_WIDTH = 100;
 
 function getStickyRight(key: string, hasActions: boolean): number {
   // Order from rightmost: actions(if any) -> signedAgreementDoc -> hodApprovalDoc -> documentAvailability
-  const order: string[] = ["signedAgreementDoc", "hodApprovalDoc", "documentAvailability"];
+  const order: string[] = [
+    "signedAgreementDoc",
+    "hodApprovalDoc",
+    "documentAvailability",
+  ];
   const idx = order.indexOf(key);
   if (idx === -1) return 0;
   let right = hasActions ? ACTION_COL_WIDTH : 0;
@@ -172,14 +176,7 @@ export function SheetsTable({
         <FiChevronDown className="inline-block ml-1 text-blue-600" size={14} />
       );
     } else if (column.type === "number") {
-      return (
-        <span
-          className="inline-block ml-1 text-orange-600 font-bold"
-          style={{ fontSize: "10px" }}
-        >
-          123
-        </span>
-      );
+      return null;
     }
     return null;
   };
@@ -344,7 +341,10 @@ export function SheetsTable({
         onClick={() => handleCellClick(record, field, canEditCell)}
         onBlur={(e) => {
           if (isEditing) {
-            saveFieldDirectly(field, e.currentTarget.textContent || "");
+            const rawValue = e.currentTarget.textContent || "";
+            const finalValue =
+              column.type === "number" ? parseInt(rawValue, 10) || 0 : rawValue;
+            saveFieldDirectly(field, finalValue);
           }
         }}
         style={cellStyle}
@@ -465,7 +465,15 @@ export function SheetsTable({
    */
   const renderActions = (record: EMoURecord) => {
     return (
-      <td className="px-3 py-2 text-xs bg-white border-l border-gray-200" style={{ position: "sticky", right: `${getActionsStickyRight()}px`, zIndex: 2, minWidth: `${ACTION_COL_WIDTH}px` }}>
+      <td
+        className="px-3 py-2 text-xs bg-white border-l border-gray-200"
+        style={{
+          position: "sticky",
+          right: `${getActionsStickyRight()}px`,
+          zIndex: 2,
+          minWidth: `${ACTION_COL_WIDTH}px`,
+        }}
+      >
         <div className="flex items-center gap-2 justify-end">
           {onView && (
             <button
@@ -518,7 +526,15 @@ export function SheetsTable({
    */
   const renderApprovalActions = (record: EMoURecord) => {
     return (
-      <td className="px-3 py-2 text-xs bg-white border-l border-gray-200" style={{ position: "sticky", right: `${getActionsStickyRight()}px`, zIndex: 2, minWidth: `${ACTION_COL_WIDTH}px` }}>
+      <td
+        className="px-3 py-2 text-xs bg-white border-l border-gray-200"
+        style={{
+          position: "sticky",
+          right: `${getActionsStickyRight()}px`,
+          zIndex: 2,
+          minWidth: `${ACTION_COL_WIDTH}px`,
+        }}
+      >
         <div className="flex items-center gap-2 justify-end">
           {onView && (
             <button
@@ -636,17 +652,25 @@ export function SheetsTable({
                     }
                   : { width: column.width, minWidth: column.width };
                 return (
-                  <th
-                    key={column.key}
-                    style={stickyStyle}
-                  >
+                  <th key={column.key} style={stickyStyle}>
                     {column.label}
                     {getFieldTypeIcon(column)}
                   </th>
                 );
               })}
               {(showActions || showApprovalActions) && (
-                <th style={{ width: `${ACTION_COL_WIDTH}px`, position: "sticky" as const, right: `${getActionsStickyRight()}px`, zIndex: 12, backgroundColor: "#fff", borderLeft: "1px solid #e5e7eb" }}>Actions</th>
+                <th
+                  style={{
+                    width: `${ACTION_COL_WIDTH}px`,
+                    position: "sticky" as const,
+                    right: `${getActionsStickyRight()}px`,
+                    zIndex: 12,
+                    backgroundColor: "#fff",
+                    borderLeft: "1px solid #e5e7eb",
+                  }}
+                >
+                  Actions
+                </th>
               )}
             </tr>
           </thead>
@@ -693,7 +717,9 @@ export function SheetsTable({
                             zIndex: 2,
                             backgroundColor: "#fff",
                             borderLeft: "1px solid #e5e7eb",
-                            minWidth: STICKY_WIDTHS[column.key as string] ? `${STICKY_WIDTHS[column.key as string]}px` : column.width,
+                            minWidth: STICKY_WIDTHS[column.key as string]
+                              ? `${STICKY_WIDTHS[column.key as string]}px`
+                              : column.width,
                           }
                         : undefined;
 
@@ -752,7 +778,8 @@ export function SheetsTable({
                           <td
                             key={column.key}
                             className={`px-3 py-2 text-xs bg-white border-l border-gray-200 ${
-                              column.editable !== false && canEdit(record.createdBy, record.department)
+                              column.editable !== false &&
+                              canEdit(record.createdBy, record.department)
                                 ? "cursor-text hover:bg-blue-50"
                                 : ""
                             }`}
@@ -761,15 +788,24 @@ export function SheetsTable({
                               handleCellClick(
                                 record,
                                 column.key,
-                                column.editable !== false && canEdit(record.createdBy, record.department),
+                                column.editable !== false &&
+                                  canEdit(record.createdBy, record.department),
                               )
                             }
                           >
-                            {editingCell?.recordId === record.id && editingCell?.field === column.key && column.type === "select" && column.selectOptions ? (
+                            {editingCell?.recordId === record.id &&
+                            editingCell?.field === column.key &&
+                            column.type === "select" &&
+                            column.selectOptions ? (
                               <select
-                                value={(inlineEditData[column.key] as string) || ""}
+                                value={
+                                  (inlineEditData[column.key] as string) || ""
+                                }
                                 onChange={(e) => {
-                                  handleInlineFieldChange(column.key, e.target.value);
+                                  handleInlineFieldChange(
+                                    column.key,
+                                    e.target.value,
+                                  );
                                   saveFieldDirectly(column.key, e.target.value);
                                 }}
                                 className="w-full px-2 py-1 border rounded text-xs"
@@ -782,7 +818,9 @@ export function SheetsTable({
                                 ))}
                               </select>
                             ) : (
-                              cleanDisplayValue(record[column.key]) as React.ReactNode
+                              (cleanDisplayValue(
+                                record[column.key],
+                              ) as React.ReactNode)
                             )}
                           </td>
                         );
