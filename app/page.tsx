@@ -233,7 +233,16 @@ function HomePage() {
         if (editableEl) {
           const field = editingCell.field as keyof EMoURecord;
           const currentText = editableEl.textContent || "";
-          saveFieldDirectly(field, currentText);
+          // Number fields must be saved as numbers
+          const numberFields = [
+            "placementOpportunity",
+            "internshipOpportunity",
+            "perStudentCost",
+          ];
+          const finalValue = numberFields.includes(field)
+            ? parseInt(currentText, 10) || 0
+            : currentText;
+          saveFieldDirectly(field, finalValue);
         } else {
           saveInlineEdit();
         }
@@ -654,8 +663,18 @@ function HomePage() {
 
     try {
       const field = editingCell.field as keyof EMoURecord;
-      const value = inlineEditData[field];
+      let value = inlineEditData[field];
       const recordId = editingCell.recordId;
+
+      // Ensure number fields are stored as numbers, not strings
+      const numberFields = [
+        "placementOpportunity",
+        "internshipOpportunity",
+        "perStudentCost",
+      ];
+      if (numberFields.includes(field) && typeof value === "string") {
+        value = parseInt(value, 10) || 0;
+      }
 
       // Only send the changed field + audit info
       const updatedData: Partial<EMoURecord> = {
@@ -706,10 +725,22 @@ function HomePage() {
 
     const recordId = editingCell.recordId;
 
+    // Ensure number fields are stored as numbers, not strings
+    const numberFields = [
+      "placementOpportunity",
+      "internshipOpportunity",
+      "perStudentCost",
+    ];
+    const coercedValue = numberFields.includes(field)
+      ? typeof value === "string"
+        ? parseInt(value, 10) || 0
+        : value
+      : value;
+
     try {
       // Only send the changed field (not the entire record)
       const updatedData: Partial<EMoURecord> = {
-        [field]: value,
+        [field]: coercedValue,
         updatedBy: user.uid,
         updatedByName: user.displayName,
         updatedAt: new Date(),
@@ -1588,14 +1619,7 @@ function HomePage() {
                               />
                             );
                           } else if (numberFields.includes(field as string)) {
-                            return (
-                              <span
-                                className="inline-block ml-1 text-orange-600 font-bold"
-                                style={{ fontSize: "10px" }}
-                              >
-                                123
-                              </span>
-                            );
+                            return null;
                           } else {
                             return null;
                           }
@@ -1644,10 +1668,19 @@ function HomePage() {
                               }
                               onBlur={(e) => {
                                 if (isEditing) {
-                                  saveFieldDirectly(
+                                  const rawValue =
+                                    e.currentTarget.textContent || "";
+                                  const numberFields = [
+                                    "placementOpportunity",
+                                    "internshipOpportunity",
+                                    "perStudentCost",
+                                  ];
+                                  const finalValue = numberFields.includes(
                                     field,
-                                    e.currentTarget.textContent || "",
-                                  );
+                                  )
+                                    ? parseInt(rawValue, 10) || 0
+                                    : rawValue;
+                                  saveFieldDirectly(field, finalValue);
                                 }
                               }}
                               style={cellStyle}

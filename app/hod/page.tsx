@@ -442,9 +442,20 @@ function HODPage() {
       ].find((r) => r.id === editingCell.recordId);
       if (!record) return;
 
+      // Ensure number fields are stored as numbers, not strings
+      const numberFields = [
+        "placementOpportunity",
+        "internshipOpportunity",
+        "perStudentCost",
+      ];
+      const field = editingCell.field as keyof EMoURecord;
+      let fieldValue = inlineEditData[field];
+      if (numberFields.includes(field) && typeof fieldValue === "string") {
+        fieldValue = parseInt(fieldValue, 10) || 0;
+      }
+
       const updateData: Partial<EMoURecord> = {
-        [editingCell.field]:
-          inlineEditData[editingCell.field as keyof EMoURecord],
+        [editingCell.field]: fieldValue,
         updatedAt: new Date(),
         updatedBy: user.uid,
         updatedByName: user.displayName,
@@ -491,6 +502,18 @@ function HODPage() {
   ) => {
     if (!editingCell || !user) return;
 
+    // Ensure number fields are stored as numbers, not strings
+    const numberFields = [
+      "placementOpportunity",
+      "internshipOpportunity",
+      "perStudentCost",
+    ];
+    const coercedValue = numberFields.includes(field)
+      ? typeof value === "string"
+        ? parseInt(value, 10) || 0
+        : value
+      : value;
+
     try {
       const record = [
         ...draftRecords,
@@ -501,7 +524,7 @@ function HODPage() {
       if (!record) return;
 
       const updateData: Partial<EMoURecord> = {
-        [field]: value,
+        [field]: coercedValue,
         updatedAt: new Date(),
         updatedBy: user.uid,
         updatedByName: user.displayName,
@@ -819,14 +842,7 @@ function HODPage() {
                     />
                   );
                 } else if (numberFields.includes(field as string)) {
-                  return (
-                    <span
-                      className="inline-block ml-1 text-orange-600 font-bold"
-                      style={{ fontSize: "10px" }}
-                    >
-                      123
-                    </span>
-                  );
+                  return null;
                 } else {
                   return null;
                 }
@@ -871,10 +887,16 @@ function HODPage() {
                     onClick={() => isEditable && handleCellClick(record, field)}
                     onBlur={(e) => {
                       if (isEditing) {
-                        saveFieldDirectly(
-                          field,
-                          e.currentTarget.textContent || "",
-                        );
+                        const rawValue = e.currentTarget.textContent || "";
+                        const numberFields = [
+                          "placementOpportunity",
+                          "internshipOpportunity",
+                          "perStudentCost",
+                        ];
+                        const finalValue = numberFields.includes(field)
+                          ? parseInt(rawValue, 10) || 0
+                          : rawValue;
+                        saveFieldDirectly(field, finalValue);
                       }
                     }}
                     style={cellStyle}
