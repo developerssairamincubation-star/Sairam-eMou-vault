@@ -13,6 +13,7 @@ import {
   CLUB_OPTIONS,
   EMOU_OUTCOME_OPTIONS,
   DOMAIN_OPTIONS,
+  SDG_GOALS,
 } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { uploadToCloudinary, deleteFromCloudinary } from "@/lib/cloudinary";
@@ -145,6 +146,7 @@ export default function EMoUForm({
     goingForRenewal: initialData?.goingForRenewal || "No",
     benefitsAchieved: initialData?.benefitsAchieved || "",
     companyRelationship: initialData?.companyRelationship || 3,
+    eventsOrganised: initialData?.eventsOrganised || 0,
     ieeeSociety: initialData?.ieeeSociety || "Not Applicable",
     ieeeCommunity: initialData?.ieeeCommunity || "Not Applicable",
     emouOutcome: initialData?.emouOutcome || "Not Applicable",
@@ -172,6 +174,11 @@ export default function EMoUForm({
   const [isDomainDropdownOpen, setIsDomainDropdownOpen] = useState(false);
   const domainDropdownRef = useRef<HTMLDivElement>(null);
 
+  // SDG Goals multi-select state
+  const [sdgSearchTerm, setSdgSearchTerm] = useState("");
+  const [isSdgDropdownOpen, setIsSdgDropdownOpen] = useState(false);
+  const sdgDropdownRef = useRef<HTMLDivElement>(null);
+
   // EMoU Outcome state
   const [customOutcome, setCustomOutcome] = useState("");
 
@@ -194,6 +201,19 @@ export default function EMoUForm({
   const filteredDomains = DOMAIN_OPTIONS.filter((d) =>
     d.toLowerCase().includes(domainSearchTerm.toLowerCase()),
   );
+
+  // Filter SDG goals based on search
+  const filteredSdgGoals = SDG_GOALS.filter((g) =>
+    g.toLowerCase().includes(sdgSearchTerm.toLowerCase()),
+  );
+
+  // Parse sdgGoals string into array
+  const selectedSdgGoals = formData.sdgGoals
+    ? formData.sdgGoals
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [];
 
   // Parse emouOutcome string into array
   const selectedOutcomes = formData.emouOutcome
@@ -251,6 +271,22 @@ export default function EMoUForm({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isClubsDropdownOpen]);
 
+  // Close SDG dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        sdgDropdownRef.current &&
+        !sdgDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsSdgDropdownOpen(false);
+      }
+    };
+    if (isSdgDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isSdgDropdownOpen]);
+
   // Perpetual/indefinite date state
   const [isPerpetual, setIsPerpetual] = useState(() => {
     // Check if toDate is perpetual (year >= 9000)
@@ -295,6 +331,7 @@ export default function EMoUForm({
       goingForRenewal: "No" as const,
       benefitsAchieved: "",
       companyRelationship: 3 as const,
+      eventsOrganised: 0,
       ieeeSociety: "Not Applicable",
       ieeeCommunity: "Not Applicable",
       emouOutcome: "Not Applicable",
@@ -576,6 +613,11 @@ export default function EMoUForm({
                 <option value="Institution">Institution</option>
                 <option value="Incubation">Incubation</option>
                 <option value="Departments">Departments</option>
+                <option value="NGO">NGO</option>
+                <option value="Innovation Eco System">
+                  Innovation Eco System
+                </option>
+                <option value="Placement Cell">Placement Cell</option>
               </select>
               {!initialData &&
                 (formData.maintainedBy === "Institution" ||
@@ -739,6 +781,25 @@ export default function EMoUForm({
                 </span>
               </div>
             </div>
+            <div>
+              <label className="block text-xs font-medium text-[#4b5563] mb-1">
+                No. of Events Organised
+              </label>
+              <input
+                type="number"
+                value={formData.eventsOrganised}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    eventsOrganised: parseInt(e.target.value) || 0,
+                  })
+                }
+                min="0"
+                step="1"
+                className="w-full"
+                placeholder="0"
+              />
+            </div>
             <div className="col-span-2">
               <label className="block text-xs font-medium text-[#4b5563] mb-1">
                 About Company
@@ -826,29 +887,32 @@ export default function EMoUForm({
                 />
                 <label
                   htmlFor="perpetual"
-                  className="text-xs text-[#4b5563] cursor-pointer"
+                  className="text-xs text-[#4b5563] cursor-pointer select-none"
                 >
                   Perpetual / Indefinite
                 </label>
               </div>
-              <input
-                type="date"
-                value={isPerpetual ? "" : toInputDate(formData.toDate)}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    toDate: toDisplayDate(e.target.value),
-                  })
-                }
-                required={!isPerpetual}
-                disabled={isPerpetual}
-                min={toInputDate(formData.fromDate) || undefined}
-                className={`w-full ${isPerpetual ? "bg-gray-100 cursor-not-allowed opacity-50" : ""}`}
-              />
-              {formData.toDate && (
-                <p className="text-xs text-[#6b7280] mt-1">
-                  {isPerpetual ? "Perpetual / Indefinite" : formData.toDate}
-                </p>
+              {!isPerpetual ? (
+                <input
+                  type="date"
+                  value={toInputDate(formData.toDate)}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      toDate: toDisplayDate(e.target.value),
+                    })
+                  }
+                  required
+                  min={toInputDate(formData.fromDate) || undefined}
+                  className="w-full"
+                />
+              ) : (
+                <div className="w-full px-3 py-2 border border-[#d1d5db] rounded-md bg-gray-100 text-sm text-[#6b7280]">
+                  Perpetual / Indefinite
+                </div>
+              )}
+              {formData.toDate && !isPerpetual && (
+                <p className="text-xs text-[#6b7280] mt-1">{formData.toDate}</p>
               )}
             </div>
             <div>
@@ -1134,19 +1198,132 @@ export default function EMoUForm({
                 )}
               </div>
             </div>
-            <div>
+            <div ref={sdgDropdownRef}>
               <label className="block text-xs font-medium text-[#4b5563] mb-1">
                 Aligned to Sairam SDG Goals
               </label>
-              <input
-                type="text"
-                value={formData.sdgGoals}
-                onChange={(e) =>
-                  setFormData({ ...formData, sdgGoals: e.target.value })
-                }
-                className="w-full"
-                placeholder="SDG 4, SDG 8, etc."
-              />
+              <div className="relative">
+                <div
+                  className={`w-full border rounded-md cursor-pointer bg-white ${
+                    isSdgDropdownOpen
+                      ? "border-black ring-2 ring-black"
+                      : "border-[#d1d5db] hover:border-gray-400"
+                  }`}
+                  onClick={() => setIsSdgDropdownOpen(!isSdgDropdownOpen)}
+                >
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span
+                      className={`text-sm truncate ${
+                        selectedSdgGoals.length > 0
+                          ? "text-[#1f2937]"
+                          : "text-[#9ca3af]"
+                      }`}
+                    >
+                      {selectedSdgGoals.length > 0
+                        ? `${selectedSdgGoals.length} goal${selectedSdgGoals.length > 1 ? "s" : ""} selected`
+                        : "Select SDG Goals"}
+                    </span>
+                    <svg
+                      className={`h-4 w-4 text-gray-500 transition-transform ${
+                        isSdgDropdownOpen ? "rotate-180" : ""
+                      }`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 9l-7 7-7-7"
+                      />
+                    </svg>
+                  </div>
+                </div>
+                {selectedSdgGoals.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {selectedSdgGoals.map((goal) => (
+                      <span
+                        key={goal}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] rounded-full bg-green-100 text-green-700 border border-green-300"
+                      >
+                        {goal}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const newGoals = selectedSdgGoals.filter(
+                              (g) => g !== goal,
+                            );
+                            setFormData({
+                              ...formData,
+                              sdgGoals: newGoals.join(", "),
+                            });
+                          }}
+                          className="text-green-500 hover:text-green-700"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {isSdgDropdownOpen && (
+                  <div className="absolute z-50 mt-1 w-full bg-white border-2 border-black rounded-md shadow-xl max-h-60 overflow-hidden">
+                    <div className="sticky top-0 bg-white border-b border-gray-200 p-2">
+                      <input
+                        type="text"
+                        value={sdgSearchTerm}
+                        onChange={(e) => setSdgSearchTerm(e.target.value)}
+                        placeholder="Search SDG goals..."
+                        className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:border-black focus:ring-1 focus:ring-black"
+                        onClick={(e) => e.stopPropagation()}
+                        autoFocus
+                      />
+                    </div>
+                    <div className="overflow-auto max-h-48">
+                      {filteredSdgGoals.map((goal) => {
+                        const isSelected = selectedSdgGoals.includes(goal);
+                        return (
+                          <div
+                            key={goal}
+                            className={`px-3 py-2 text-sm cursor-pointer transition-colors flex items-center justify-between ${
+                              isSelected
+                                ? "bg-green-50 text-green-700 font-medium"
+                                : "text-gray-700 hover:bg-gray-100"
+                            }`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              let newGoals: string[];
+                              if (isSelected) {
+                                newGoals = selectedSdgGoals.filter(
+                                  (g) => g !== goal,
+                                );
+                              } else {
+                                newGoals = [...selectedSdgGoals, goal];
+                              }
+                              setFormData({
+                                ...formData,
+                                sdgGoals: newGoals.join(", "),
+                              });
+                            }}
+                          >
+                            <span>{goal}</span>
+                            {isSelected && (
+                              <span className="text-green-600">✓</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {filteredSdgGoals.length === 0 && (
+                        <div className="px-3 py-2 text-sm text-gray-400 italic">
+                          No goals found
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* IEEE Society - Searchable Dropdown */}

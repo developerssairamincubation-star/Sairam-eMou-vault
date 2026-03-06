@@ -17,6 +17,7 @@ import {
   CLUB_OPTIONS,
   EMOU_OUTCOME_OPTIONS,
   DOMAIN_OPTIONS,
+  SDG_GOALS,
 } from "@/types";
 import { getEMoUs, updateEMoU } from "@/lib/firestore";
 import { uploadToCloudinary } from "@/lib/cloudinary";
@@ -447,6 +448,7 @@ function HODPage() {
         "placementOpportunity",
         "internshipOpportunity",
         "perStudentCost",
+        "eventsOrganised",
       ];
       const field = editingCell.field as keyof EMoURecord;
       let fieldValue = inlineEditData[field];
@@ -507,6 +509,7 @@ function HODPage() {
       "placementOpportunity",
       "internshipOpportunity",
       "perStudentCost",
+      "eventsOrganised",
     ];
     const coercedValue = numberFields.includes(field)
       ? typeof value === "string"
@@ -683,6 +686,7 @@ function HODPage() {
               <th style={{ minWidth: "200px" }}>Company Address</th>
               <th style={{ width: "180px" }}>Company Website</th>
               <th style={{ width: "90px" }}>Relationship</th>
+              <th style={{ width: "100px" }}>Events Organised</th>
               <th style={{ width: "150px" }}>Industry Contact</th>
               <th style={{ width: "120px" }}>Industry Mobile</th>
               <th style={{ width: "180px" }}>Industry Email</th>
@@ -813,6 +817,7 @@ function HODPage() {
                   "placementOpportunity",
                   "internshipOpportunity",
                   "perStudentCost",
+                  "eventsOrganised",
                 ];
                 const largeTextFields = [
                   "description",
@@ -892,6 +897,7 @@ function HODPage() {
                           "placementOpportunity",
                           "internshipOpportunity",
                           "perStudentCost",
+                          "eventsOrganised",
                         ];
                         const finalValue = numberFields.includes(field)
                           ? parseInt(rawValue, 10) || 0
@@ -1076,6 +1082,15 @@ function HODPage() {
                               { value: "Institution", label: "Institution" },
                               { value: "Incubation", label: "Incubation" },
                               { value: "Departments", label: "Departments" },
+                              { value: "NGO", label: "NGO" },
+                              {
+                                value: "Innovation Eco System",
+                                label: "Innovation Eco System",
+                              },
+                              {
+                                value: "Placement Cell",
+                                label: "Placement Cell",
+                              },
                             ]}
                             value={
                               inlineEditData.maintainedBy ||
@@ -1338,6 +1353,11 @@ function HODPage() {
                     "text-xs",
                   )}
                   {renderEditableCell(
+                    "eventsOrganised",
+                    String(record.eventsOrganised ?? 0),
+                    "text-xs text-center",
+                  )}
+                  {renderEditableCell(
                     "industryContactName",
                     record.industryContactName || "-",
                     "text-xs",
@@ -1433,12 +1453,68 @@ function HODPage() {
                       </td>
                     );
                   })()}
-                  {renderEditableCell(
-                    "sdgGoals",
-                    record.sdgGoals || "-",
-                    "text-xs",
-                    40,
-                  )}
+                  {/* SDG Goals - Multi-Select Dropdown */}
+                  {(() => {
+                    const isEditing =
+                      editingCell?.recordId === record.id &&
+                      editingCell?.field === "sdgGoals";
+                    const cellStyle = isEditing
+                      ? { padding: 0, overflow: "visible" as const }
+                      : {};
+                    return (
+                      <td
+                        className={`text-xs relative ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
+                        onClick={() =>
+                          isEditable && handleCellClick(record, "sdgGoals")
+                        }
+                        style={cellStyle}
+                        title={
+                          isEditable && !isEditing ? "Click to select" : ""
+                        }
+                      >
+                        {isEditing ? (
+                          <MultiSelectCellDropdown
+                            predefinedOptions={[...SDG_GOALS]}
+                            value={
+                              (inlineEditData.sdgGoals as string) ||
+                              record.sdgGoals ||
+                              "Not Applicable"
+                            }
+                            onChange={(value) => {
+                              setInlineEditData((prev) => ({
+                                ...prev,
+                                sdgGoals: value,
+                              }));
+                            }}
+                            onClose={(currentValue) => {
+                              saveFieldDirectly("sdgGoals", currentValue);
+                            }}
+                            placeholder="SDG Goals"
+                          />
+                        ) : (
+                          <span className="flex items-center justify-between gap-1 px-1">
+                            <span
+                              className="truncate"
+                              title={record.sdgGoals || "-"}
+                            >
+                              {(() => {
+                                const val = record.sdgGoals || "-";
+                                return val.length > 30
+                                  ? val.substring(0, 30) + "..."
+                                  : val;
+                              })()}
+                            </span>
+                            {isEditable && (
+                              <FiChevronDown
+                                className="text-blue-600 flex-shrink-0"
+                                size={14}
+                              />
+                            )}
+                          </span>
+                        )}
+                      </td>
+                    );
+                  })()}
                   {renderEditableCell(
                     "skillsTechnologies",
                     record.skillsTechnologies || "-",
@@ -1692,12 +1768,8 @@ function HODPage() {
                                 emouOutcome: value,
                               }));
                             }}
-                            onClose={() => {
-                              const finalValue =
-                                (inlineEditData.emouOutcome as string) ||
-                                record.emouOutcome ||
-                                "Not Applicable";
-                              saveFieldDirectly("emouOutcome", finalValue);
+                            onClose={(currentValue) => {
+                              saveFieldDirectly("emouOutcome", currentValue);
                             }}
                             placeholder="EMoU Outcome"
                           />

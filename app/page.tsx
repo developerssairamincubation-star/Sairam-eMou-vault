@@ -22,6 +22,7 @@ import {
   CLUB_OPTIONS,
   EMOU_OUTCOME_OPTIONS,
   DOMAIN_OPTIONS,
+  SDG_GOALS,
 } from "@/types";
 import {
   getEMoUsPage,
@@ -238,6 +239,7 @@ function HomePage() {
             "placementOpportunity",
             "internshipOpportunity",
             "perStudentCost",
+            "eventsOrganised",
           ];
           const finalValue = numberFields.includes(field)
             ? parseInt(currentText, 10) || 0
@@ -671,6 +673,7 @@ function HomePage() {
         "placementOpportunity",
         "internshipOpportunity",
         "perStudentCost",
+        "eventsOrganised",
       ];
       if (numberFields.includes(field) && typeof value === "string") {
         value = parseInt(value, 10) || 0;
@@ -730,6 +733,7 @@ function HomePage() {
       "placementOpportunity",
       "internshipOpportunity",
       "perStudentCost",
+      "eventsOrganised",
     ];
     const coercedValue = numberFields.includes(field)
       ? typeof value === "string"
@@ -776,7 +780,11 @@ function HomePage() {
       if (field === "maintainedBy" && typeof value === "string") {
         if (value === "Institution" || value === "Incubation") {
           updatedData.department = value;
-        } else if (value === "Departments") {
+        } else if (
+          value !== "NGO" &&
+          value !== "Innovation Eco System" &&
+          value !== "Placement Cell"
+        ) {
           const currentDept = (inlineEditData.department as string) || "";
           if (currentDept === "Institution" || currentDept === "Incubation") {
             updatedData.department = "CSE";
@@ -851,6 +859,7 @@ function HomePage() {
       "Description",
       "Placement Opportunities",
       "Internship Opportunities",
+      "Events Organised",
       "IEEE Society",
       "IEEE Community",
       "EMoU Outcome",
@@ -868,6 +877,7 @@ function HomePage() {
       r.description,
       r.placementOpportunity || 0,
       r.internshipOpportunity || 0,
+      r.eventsOrganised || 0,
       r.ieeeSociety || "",
       `"${(r.ieeeCommunity || "").replace(/"/g, '""')}"`,
       `"${(r.emouOutcome || "").replace(/"/g, '""')}"`,
@@ -1497,6 +1507,7 @@ function HomePage() {
                         <th style={{ minWidth: "200px" }}>Company Address</th>
                         <th style={{ width: "180px" }}>Company Website</th>
                         <th style={{ width: "90px" }}>Relationship</th>
+                        <th style={{ width: "100px" }}>Events Organised</th>
                         <th style={{ width: "150px" }}>Industry Contact</th>
                         <th style={{ width: "120px" }}>Industry Mobile</th>
                         <th style={{ width: "180px" }}>Industry Email</th>
@@ -1674,6 +1685,7 @@ function HomePage() {
                                     "placementOpportunity",
                                     "internshipOpportunity",
                                     "perStudentCost",
+                                    "eventsOrganised",
                                   ];
                                   const finalValue = numberFields.includes(
                                     field,
@@ -1878,6 +1890,18 @@ function HomePage() {
                                         {
                                           value: "Departments",
                                           label: "Departments",
+                                        },
+                                        {
+                                          value: "NGO",
+                                          label: "NGO",
+                                        },
+                                        {
+                                          value: "Innovation Eco System",
+                                          label: "Innovation Eco System",
+                                        },
+                                        {
+                                          value: "Placement Cell",
+                                          label: "Placement Cell",
                                         },
                                       ]}
                                       value={
@@ -2218,6 +2242,11 @@ function HomePage() {
                               );
                             })()}
                             {renderEditableCell(
+                              "eventsOrganised",
+                              String(record.eventsOrganised ?? 0),
+                              "text-xs text-center",
+                            )}
+                            {renderEditableCell(
                               "industryContactName",
                               record.industryContactName || "-",
                               "text-xs",
@@ -2309,11 +2338,72 @@ function HomePage() {
                                 </td>
                               );
                             })()}
-                            {renderEditableCell(
-                              "sdgGoals",
-                              record.sdgGoals || "-",
-                              "text-xs",
-                            )}
+                            {/* SDG Goals - Multi-Select Dropdown */}
+                            {(() => {
+                              const isEditing =
+                                editingCell?.recordId === record.id &&
+                                editingCell?.field === "sdgGoals";
+                              const cellStyle = isEditing
+                                ? { padding: 0, overflow: "visible" as const }
+                                : {};
+                              return (
+                                <td
+                                  className={`text-xs relative ${isEditable ? "cursor-pointer hover:bg-blue-50" : ""}`}
+                                  onClick={() =>
+                                    isEditable &&
+                                    handleCellClick(record, "sdgGoals")
+                                  }
+                                  style={cellStyle}
+                                  title={
+                                    isEditable && !isEditing
+                                      ? "Click to select"
+                                      : ""
+                                  }
+                                >
+                                  {isEditing ? (
+                                    <MultiSelectCellDropdown
+                                      predefinedOptions={[...SDG_GOALS]}
+                                      value={
+                                        (inlineEditData.sdgGoals as string) ||
+                                        record.sdgGoals ||
+                                        "Not Applicable"
+                                      }
+                                      onChange={(value) => {
+                                        setInlineEditData((prev) => ({
+                                          ...prev,
+                                          sdgGoals: value,
+                                        }));
+                                      }}
+                                      onClose={(currentValue) => {
+                                        saveFieldDirectly(
+                                          "sdgGoals",
+                                          currentValue,
+                                        );
+                                      }}
+                                      placeholder="SDG Goals"
+                                    />
+                                  ) : (
+                                    <span className="flex items-center justify-between gap-1 px-1">
+                                      <span
+                                        className="truncate"
+                                        title={record.sdgGoals || "-"}
+                                      >
+                                        {(() => {
+                                          const val = record.sdgGoals || "-";
+                                          return val.length > 30
+                                            ? val.substring(0, 30) + "..."
+                                            : val;
+                                        })()}
+                                      </span>
+                                      <FiChevronDown
+                                        className="text-blue-600 flex-shrink-0"
+                                        size={14}
+                                      />
+                                    </span>
+                                  )}
+                                </td>
+                              );
+                            })()}
                             {renderEditableCell(
                               "skillsTechnologies",
                               record.skillsTechnologies || "-",
@@ -2572,15 +2662,10 @@ function HomePage() {
                                           emouOutcome: value,
                                         }));
                                       }}
-                                      onClose={() => {
-                                        // Save on close
-                                        const finalValue =
-                                          (inlineEditData.emouOutcome as string) ||
-                                          record.emouOutcome ||
-                                          "Not Applicable";
+                                      onClose={(currentValue) => {
                                         saveFieldDirectly(
                                           "emouOutcome",
-                                          finalValue,
+                                          currentValue,
                                         );
                                       }}
                                       placeholder="EMoU Outcome"

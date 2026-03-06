@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+  startTransition,
+} from "react";
 import { FiChevronDown, FiCheck, FiSearch, FiX } from "react-icons/fi";
 
 interface DropdownOption {
@@ -616,7 +623,7 @@ interface MultiSelectCellDropdownProps {
   predefinedOptions: string[];
   value: string; // comma-separated
   onChange: (value: string) => void;
-  onClose: () => void;
+  onClose: (currentValue: string) => void;
   placeholder?: string;
 }
 
@@ -630,6 +637,11 @@ export function MultiSelectCellDropdown({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const [customInput, setCustomInput] = useState("");
+  // Track the latest value in a ref to avoid stale closure issues
+  const valueRef = useRef(value);
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
 
   const selectedItems = useMemo(
     () =>
@@ -655,7 +667,7 @@ export function MultiSelectCellDropdown({
         dropdownRef.current &&
         !dropdownRef.current.contains(event.target as Node)
       ) {
-        onClose();
+        onClose(valueRef.current);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -666,40 +678,52 @@ export function MultiSelectCellDropdown({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onClose(valueRef.current);
       }
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  const toggleItem = (item: string) => {
-    let newItems: string[];
-    if (selectedItems.includes(item)) {
-      newItems = selectedItems.filter((i) => i !== item);
-    } else {
-      newItems = [...selectedItems, item];
-    }
-    const newValue =
-      newItems.length > 0 ? newItems.join(", ") : "Not Applicable";
-    onChange(newValue);
-  };
+  const toggleItem = useCallback(
+    (item: string) => {
+      let newItems: string[];
+      if (selectedItems.includes(item)) {
+        newItems = selectedItems.filter((i) => i !== item);
+      } else {
+        newItems = [...selectedItems, item];
+      }
+      const newValue =
+        newItems.length > 0 ? newItems.join(", ") : "Not Applicable";
+      startTransition(() => {
+        onChange(newValue);
+      });
+    },
+    [selectedItems, onChange],
+  );
 
-  const addCustomItem = () => {
+  const addCustomItem = useCallback(() => {
     const trimmed = customInput.trim();
     if (trimmed && !selectedItems.includes(trimmed)) {
       const newItems = [...selectedItems, trimmed];
-      onChange(newItems.join(", "));
+      startTransition(() => {
+        onChange(newItems.join(", "));
+      });
       setCustomInput("");
     }
-  };
+  }, [customInput, selectedItems, onChange]);
 
-  const removeItem = (item: string) => {
-    const newItems = selectedItems.filter((i) => i !== item);
-    const newValue =
-      newItems.length > 0 ? newItems.join(", ") : "Not Applicable";
-    onChange(newValue);
-  };
+  const removeItem = useCallback(
+    (item: string) => {
+      const newItems = selectedItems.filter((i) => i !== item);
+      const newValue =
+        newItems.length > 0 ? newItems.join(", ") : "Not Applicable";
+      startTransition(() => {
+        onChange(newValue);
+      });
+    },
+    [selectedItems, onChange],
+  );
 
   return (
     <div ref={dropdownRef} className="relative z-[10000]" data-cell-dropdown>
@@ -717,20 +741,20 @@ export function MultiSelectCellDropdown({
 
         {/* Selected items */}
         {selectedItems.length > 0 && (
-          <div className="px-3 py-2 border-b border-gray-200 flex flex-wrap gap-1">
+          <div className="px-3 py-2 border-b border-gray-200 grid grid-cols-2 gap-1">
             {selectedItems.map((item) => (
               <span
                 key={item}
                 className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] rounded-full bg-blue-100 text-blue-700 border border-blue-300"
               >
-                {item}
+                <span className="truncate">{item}</span>
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     removeItem(item);
                   }}
-                  className="text-blue-500 hover:text-blue-700"
+                  className="text-blue-500 hover:text-blue-700 flex-shrink-0"
                 >
                   <FiX size={10} />
                 </button>
@@ -746,22 +770,26 @@ export function MultiSelectCellDropdown({
             return (
               <div
                 key={option}
-                onMouseDown={(e) => {
-                  e.preventDefault();
+                onClick={(e) => {
                   e.stopPropagation();
                   toggleItem(option);
                 }}
                 className={`
-                  flex items-center justify-between gap-2 px-3 py-2
+                  flex items-center gap-2 px-3 py-2
                   cursor-pointer text-xs transition-colors duration-75
                   ${isSelected ? "text-black font-semibold bg-blue-50" : "text-neutral-700"}
                   hover:bg-neutral-200
                 `}
               >
-                <span>{option}</span>
-                {isSelected && (
-                  <FiCheck className="text-blue-600 flex-shrink-0" size={14} />
-                )}
+                <div
+                  className={`
+                    flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center pointer-events-none
+                    ${isSelected ? "bg-blue-600 border-blue-600" : "border-gray-400 bg-white"}
+                  `}
+                >
+                  {isSelected && <FiCheck className="text-white" size={11} />}
+                </div>
+                <span className="pointer-events-none">{option}</span>
               </div>
             );
           })}
@@ -801,7 +829,7 @@ export function MultiSelectCellDropdown({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onClose();
+              onClose(valueRef.current);
             }}
             className="w-full px-3 py-1.5 text-xs font-medium bg-black text-white rounded hover:bg-neutral-800"
           >

@@ -23,6 +23,7 @@ import {
   CLUB_OPTIONS,
   EMOU_OUTCOME_OPTIONS,
   DOMAIN_OPTIONS,
+  SDG_GOALS,
 } from "@/types";
 import { getAllUsers, getEMoUs, updateEMoU, deleteEMoU } from "@/lib/firestore";
 import { calculateStatusFromToDate } from "@/lib/sheetsUtils";
@@ -168,6 +169,7 @@ function AdminPage() {
             "placementOpportunity",
             "internshipOpportunity",
             "perStudentCost",
+            "eventsOrganised",
           ];
           const finalValue = numberFields.includes(field)
             ? parseInt(currentText, 10) || 0
@@ -357,6 +359,7 @@ function AdminPage() {
         "placementOpportunity",
         "internshipOpportunity",
         "perStudentCost",
+        "eventsOrganised",
       ];
       if (numberFields.includes(field) && typeof value === "string") {
         value = parseInt(value, 10) || 0;
@@ -421,6 +424,7 @@ function AdminPage() {
       "placementOpportunity",
       "internshipOpportunity",
       "perStudentCost",
+      "eventsOrganised",
     ];
     const coercedValue = numberFields.includes(field)
       ? typeof value === "string"
@@ -471,7 +475,11 @@ function AdminPage() {
       if (field === "maintainedBy" && typeof value === "string") {
         if (value === "Institution" || value === "Incubation") {
           updatedData.department = value as DepartmentCode;
-        } else if (value === "Departments") {
+        } else if (
+          value !== "NGO" &&
+          value !== "Innovation Eco System" &&
+          value !== "Placement Cell"
+        ) {
           const currentDept = (inlineEditData.department as string) || "";
           if (currentDept === "Institution" || currentDept === "Incubation") {
             updatedData.department = "CSE" as DepartmentCode;
@@ -1001,6 +1009,7 @@ function AdminPage() {
       r.perStudentCost ?? "",
       r.placementOpportunity ?? "",
       r.internshipOpportunity ?? "",
+      r.eventsOrganised ?? "",
       r.goingForRenewal,
       r.benefitsAchieved || "",
       r.documentAvailability,
@@ -1072,6 +1081,7 @@ function AdminPage() {
           "Per Student Cost": r.perStudentCost ?? "",
           "Placement Opportunities": r.placementOpportunity ?? "",
           "Internship Opportunities": r.internshipOpportunity ?? "",
+          "Events Organised": r.eventsOrganised ?? "",
           "Going For Renewal": r.goingForRenewal,
           "Benefits Achieved": r.benefitsAchieved || "",
           "Document Availability": r.documentAvailability,
@@ -1263,6 +1273,7 @@ function AdminPage() {
                 "placementOpportunity",
                 "internshipOpportunity",
                 "perStudentCost",
+                "eventsOrganised",
               ];
               const finalValue = numberFields.includes(field)
                 ? parseInt(rawValue, 10) || 0
@@ -1372,6 +1383,7 @@ function AdminPage() {
                 <th style={{ minWidth: "200px" }}>Company Address</th>
                 <th style={{ width: "180px" }}>Company Website</th>
                 <th style={{ width: "90px" }}>Relationship</th>
+                <th style={{ width: "100px" }}>Events Organised</th>
                 <th style={{ width: "150px" }}>Industry Contact</th>
                 <th style={{ width: "120px" }}>Industry Mobile</th>
                 <th style={{ width: "180px" }}>Industry Email</th>
@@ -1625,6 +1637,12 @@ function AdminPage() {
                         { value: "Institution", label: "Institution" },
                         { value: "Incubation", label: "Incubation" },
                         { value: "Departments", label: "Departments" },
+                        { value: "NGO", label: "NGO" },
+                        {
+                          value: "Innovation Eco System",
+                          label: "Innovation Eco System",
+                        },
+                        { value: "Placement Cell", label: "Placement Cell" },
                       ],
                       "Departments",
                     )}
@@ -1729,6 +1747,12 @@ function AdminPage() {
                     )}
                     {renderEditableCell(
                       record,
+                      "eventsOrganised",
+                      String(record.eventsOrganised ?? 0),
+                      "text-xs text-center",
+                    )}
+                    {renderEditableCell(
+                      record,
                       "industryContactName",
                       record.industryContactName || "-",
                       "text-xs",
@@ -1820,12 +1844,64 @@ function AdminPage() {
                         </td>
                       );
                     })()}
-                    {renderEditableCell(
-                      record,
-                      "sdgGoals",
-                      record.sdgGoals || "-",
-                      "text-xs",
-                    )}
+                    {/* SDG Goals - Multi-Select Dropdown */}
+                    {(() => {
+                      const isEditing =
+                        editingCell?.recordId === record.id &&
+                        editingCell?.field === "sdgGoals";
+                      const cellStyle = isEditing
+                        ? { padding: 0, overflow: "visible" as const }
+                        : {};
+                      return (
+                        <td
+                          className={`text-xs relative cursor-pointer hover:bg-blue-50`}
+                          onClick={() =>
+                            !isEditing && handleCellClick(record, "sdgGoals")
+                          }
+                          style={cellStyle}
+                          title={!isEditing ? "Click to select" : ""}
+                        >
+                          {isEditing ? (
+                            <MultiSelectCellDropdown
+                              predefinedOptions={[...SDG_GOALS]}
+                              value={
+                                (inlineEditData.sdgGoals as string) ||
+                                record.sdgGoals ||
+                                "Not Applicable"
+                              }
+                              onChange={(value) => {
+                                setInlineEditData((prev) => ({
+                                  ...prev,
+                                  sdgGoals: value,
+                                }));
+                              }}
+                              onClose={(currentValue) => {
+                                saveFieldDirectly("sdgGoals", currentValue);
+                              }}
+                              placeholder="SDG Goals"
+                            />
+                          ) : (
+                            <span className="flex items-center justify-between gap-1 px-2 py-1">
+                              <span
+                                className="truncate text-xs"
+                                title={record.sdgGoals || "-"}
+                              >
+                                {(() => {
+                                  const val = record.sdgGoals || "-";
+                                  return val.length > 30
+                                    ? val.substring(0, 30) + "..."
+                                    : val;
+                                })()}
+                              </span>
+                              <FiChevronDown
+                                className="text-blue-600 flex-shrink-0"
+                                size={14}
+                              />
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })()}
                     {renderEditableCell(
                       record,
                       "skillsTechnologies",
@@ -2012,12 +2088,8 @@ function AdminPage() {
                                   emouOutcome: value,
                                 }));
                               }}
-                              onClose={() => {
-                                const finalValue =
-                                  (inlineEditData.emouOutcome as string) ||
-                                  record.emouOutcome ||
-                                  "Not Applicable";
-                                saveFieldDirectly("emouOutcome", finalValue);
+                              onClose={(currentValue) => {
+                                saveFieldDirectly("emouOutcome", currentValue);
                               }}
                               placeholder="EMoU Outcome"
                             />

@@ -25,7 +25,7 @@ export type DocumentAvailability = 'Available' | 'Not Available';
 export type ScopeType = 'National' | 'International';
 
 // Maintained By
-export type MaintainedBy = 'Institution' | 'Incubation' | 'Departments';
+export type MaintainedBy = 'Institution' | 'Incubation' | 'Departments' | 'NGO' | 'Innovation Eco System' | 'Placement Cell';
 
 // IEEE Societies
 export const IEEE_SOCIETIES = [
@@ -140,6 +140,7 @@ export const EMOU_OUTCOME_OPTIONS = [
   "Deputation of Industry Person",
   "BoS Members",
   "Curriculum Development",
+  "Value Added Course",
 ] as const;
 
 // Domain options
@@ -184,6 +185,29 @@ export type DomainOption = typeof DOMAIN_OPTIONS[number];
 
 export type EMoUOutcomeOption = typeof EMOU_OUTCOME_OPTIONS[number];
 
+// UN Sustainable Development Goals
+export const SDG_GOALS = [
+  "SDG 1: No Poverty",
+  "SDG 2: Zero Hunger",
+  "SDG 3: Good Health and Well-being",
+  "SDG 4: Quality Education",
+  "SDG 5: Gender Equality",
+  "SDG 6: Clean Water and Sanitation",
+  "SDG 7: Affordable and Clean Energy",
+  "SDG 8: Decent Work and Economic Growth",
+  "SDG 9: Industry, Innovation and Infrastructure",
+  "SDG 10: Reduced Inequalities",
+  "SDG 11: Sustainable Cities and Communities",
+  "SDG 12: Responsible Consumption and Production",
+  "SDG 13: Climate Action",
+  "SDG 14: Life Below Water",
+  "SDG 15: Life on Land",
+  "SDG 16: Peace, Justice and Strong Institutions",
+  "SDG 17: Partnerships for the Goals",
+] as const;
+
+export type SDGGoal = typeof SDG_GOALS[number];
+
 // eMoU Record interface - matches all fields from README
 export interface EMoURecord {
   id: string; // Format: YY + DEPARTMENT_CODE + SEQUENTIAL_NUMBER (e.g., 26CSE001)
@@ -218,6 +242,7 @@ export interface EMoURecord {
   goingForRenewal: 'Yes' | 'No';
   benefitsAchieved?: string;
   companyRelationship?: 1 | 2 | 3 | 4 | 5;
+  eventsOrganised?: number; // Number of events organised
   ieeeSociety?: string; // Selected IEEE society
   ieeeCommunity?: string; // Selected IEEE community
   emouOutcome?: string; // Comma-separated outcomes (predefined + custom)
