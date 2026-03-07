@@ -2576,6 +2576,84 @@ function AdminPage() {
                     className="w-full max-w-md"
                   />
                 </div>
+
+                {/* Export Buttons */}
+                <div className="flex items-center gap-2">
+                  {activeTab === "pending" && (
+                    <>
+                      <button
+                        onClick={() =>
+                          handleExportSection(pendingRecords, "Pending", "csv")
+                        }
+                        className="btn btn-secondary flex items-center gap-2 text-sm"
+                        disabled={pendingRecords.length === 0}
+                      >
+                        <FiDownload /> CSV
+                      </button>
+                      <button
+                        onClick={() =>
+                          handleExportSection(pendingRecords, "Pending", "xlsx")
+                        }
+                        className="btn btn-secondary flex items-center gap-2 text-sm"
+                        disabled={pendingRecords.length === 0}
+                      >
+                        <FiDownload /> Excel
+                      </button>
+                    </>
+                  )}
+                  {activeTab === "drafts" && (
+                    <>
+                      <button
+                        onClick={() =>
+                          handleExportSection(draftRecords, "Drafts", "csv")
+                        }
+                        className="btn btn-secondary flex items-center gap-2 text-sm"
+                        disabled={draftRecords.length === 0}
+                      >
+                        <FiDownload /> CSV
+                      </button>
+                      <button
+                        onClick={() =>
+                          handleExportSection(draftRecords, "Drafts", "xlsx")
+                        }
+                        className="btn btn-secondary flex items-center gap-2 text-sm"
+                        disabled={draftRecords.length === 0}
+                      >
+                        <FiDownload /> Excel
+                      </button>
+                    </>
+                  )}
+                  {activeTab === "approved" && (
+                    <>
+                      <button
+                        onClick={() =>
+                          handleExportSection(
+                            approvedRecords,
+                            "Approved",
+                            "csv",
+                          )
+                        }
+                        className="btn btn-secondary flex items-center gap-2 text-sm"
+                        disabled={approvedRecords.length === 0}
+                      >
+                        <FiDownload /> CSV
+                      </button>
+                      <button
+                        onClick={() =>
+                          handleExportSection(
+                            approvedRecords,
+                            "Approved",
+                            "xlsx",
+                          )
+                        }
+                        className="btn btn-secondary flex items-center gap-2 text-sm"
+                        disabled={approvedRecords.length === 0}
+                      >
+                        <FiDownload /> Excel
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -2936,36 +3014,6 @@ function AdminPage() {
           {/* Pending Approvals Tab */}
           {activeTab === "pending" && (
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-[#1f2937]">
-                    Pending Approvals
-                  </h2>
-                  <p className="text-xs text-[#6b7280] mt-0.5">
-                    {pendingRecords.length} record(s)
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() =>
-                      handleExportSection(pendingRecords, "Pending", "csv")
-                    }
-                    className="btn btn-secondary flex items-center gap-2 text-sm"
-                    disabled={pendingRecords.length === 0}
-                  >
-                    <FiDownload /> CSV
-                  </button>
-                  <button
-                    onClick={() =>
-                      handleExportSection(pendingRecords, "Pending", "xlsx")
-                    }
-                    className="btn btn-secondary flex items-center gap-2 text-sm"
-                    disabled={pendingRecords.length === 0}
-                  >
-                    <FiDownload /> Excel
-                  </button>
-                </div>
-              </div>
               {renderRecordTable(pendingRecords, true, "pending")}
             </div>
           )}
@@ -2973,36 +3021,6 @@ function AdminPage() {
           {/* Draft Records Tab */}
           {activeTab === "drafts" && (
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-[#1f2937]">
-                    Draft Records
-                  </h2>
-                  <p className="text-xs text-[#6b7280] mt-0.5">
-                    {draftRecords.length} record(s)
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() =>
-                      handleExportSection(draftRecords, "Drafts", "csv")
-                    }
-                    className="btn btn-secondary flex items-center gap-2 text-sm"
-                    disabled={draftRecords.length === 0}
-                  >
-                    <FiDownload /> CSV
-                  </button>
-                  <button
-                    onClick={() =>
-                      handleExportSection(draftRecords, "Drafts", "xlsx")
-                    }
-                    className="btn btn-secondary flex items-center gap-2 text-sm"
-                    disabled={draftRecords.length === 0}
-                  >
-                    <FiDownload /> Excel
-                  </button>
-                </div>
-              </div>
               {renderRecordTable(draftRecords, true, "draft")}
             </div>
           )}
@@ -3010,36 +3028,6 @@ function AdminPage() {
           {/* Approved Records Tab */}
           {activeTab === "approved" && (
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-[#1f2937]">
-                    Approved Records
-                  </h2>
-                  <p className="text-xs text-[#6b7280] mt-0.5">
-                    {approvedRecords.length} record(s)
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() =>
-                      handleExportSection(approvedRecords, "Approved", "csv")
-                    }
-                    className="btn btn-secondary flex items-center gap-2 text-sm"
-                    disabled={approvedRecords.length === 0}
-                  >
-                    <FiDownload /> CSV
-                  </button>
-                  <button
-                    onClick={() =>
-                      handleExportSection(approvedRecords, "Approved", "xlsx")
-                    }
-                    className="btn btn-secondary flex items-center gap-2 text-sm"
-                    disabled={approvedRecords.length === 0}
-                  >
-                    <FiDownload /> Excel
-                  </button>
-                </div>
-              </div>
               {renderRecordTable(approvedRecords, false, "approved")}
             </div>
           )}
