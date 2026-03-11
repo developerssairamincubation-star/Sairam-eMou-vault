@@ -80,14 +80,16 @@ export async function DELETE(request: NextRequest) {
     const userData = userDoc.data();
 
     // Delete user from Firebase Authentication
+    let authUserDeleted = false;
     try {
+      await adminAuth.getUser(uid);
       await adminAuth.deleteUser(uid);
+      authUserDeleted = true;
     } catch (error) {
       const err = error as { code?: string };
       if (err.code !== "auth/user-not-found") {
         throw error;
       }
-      // Continue if user not found in Auth (might be already deleted)
     }
 
     // Delete user from Firestore
@@ -102,6 +104,7 @@ export async function DELETE(request: NextRequest) {
       targetUserId: uid,
       targetUserEmail: userData?.email || "unknown",
       targetUserRole: userData?.role || "unknown",
+      authUserDeleted,
       timestamp: now,
       ipAddress: request.headers.get("x-forwarded-for") || "unknown",
       userAgent: request.headers.get("user-agent") || "unknown",
@@ -109,11 +112,13 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: "User deleted successfully",
+      message: authUserDeleted
+        ? "User deleted successfully from both Auth and Firestore"
+        : "User deleted from Firestore only (Auth user was not found)",
+      authUserDeleted,
     });
 
   } catch (error) {
-    console.error("Error deleting user:", error);
     const err = error as { message?: string };
     return NextResponse.json(
       { error: err.message || "Failed to delete user" },
