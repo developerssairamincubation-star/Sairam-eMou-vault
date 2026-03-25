@@ -832,12 +832,8 @@ function HomePage() {
       // Fetch a large page for export (or implement a separate export endpoint)
       const result = await getEMoUsPage(1, 10000, filters, approvalStatus);
 
-      // Filter to only export records with at least one document
-      const filteredData = result.data.filter(
-        (r) => r.hodApprovalDoc || r.signedAgreementDoc,
-      );
-
-      const csv = generateCSV(filteredData);
+      // Export all records (no filter)
+      const csv = generateCSV(result.data);
       downloadCSV(
         csv,
         `emou-records-${new Date().toISOString().split("T")[0]}.csv`,
