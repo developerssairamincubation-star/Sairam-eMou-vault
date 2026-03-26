@@ -32,6 +32,7 @@ import {
 } from "@/lib/firestore";
 import { uploadToCloudinary, deleteFromCloudinary } from "@/lib/cloudinary";
 import { useRouter } from "next/navigation";
+import * as XLSX from "xlsx";
 import {
   FiUpload,
   FiDownload,
@@ -817,82 +818,103 @@ function HomePage() {
   };
 
   const handleExport = async () => {
-    // For export, we need to fetch all records (without pagination)
+    // For export, fetch all approved records and apply the same client-side status logic as the table
     try {
-      setAlert({ message: "Preparing export...", type: "info" });
+      setAlert({ message: "Preparing Excel export...", type: "info" });
       const filters: FilterOptions = {};
       if (selectedDepartment !== "all") {
         filters.department = selectedDepartment as FilterOptions["department"];
       }
-      if (selectedStatus !== "all") {
-        filters.status = selectedStatus as FilterOptions["status"];
+      if (selectedStatus === "Renewal Pending") {
+        filters.goingForRenewal = "Yes";
       }
       const approvalStatus = "approved";
 
-      // Fetch a large page for export (or implement a separate export endpoint)
+      // Fetch a large page for export
       const result = await getEMoUsPage(1, 10000, filters, approvalStatus);
+      let exportData = result.data;
 
-      // Export all records (no filter)
-      const csv = generateCSV(result.data);
-      downloadCSV(
-        csv,
-        `emou-records-${new Date().toISOString().split("T")[0]}.csv`,
-      );
-      setAlert({ message: "Export completed!", type: "success" });
+      // Apply same client-side status filtering used in table view
+      if (selectedStatus === "Active") {
+        exportData = exportData.filter(
+          (record) => getDisplayStatus(record) === "Active",
+        );
+      } else if (selectedStatus === "Expiring") {
+        exportData = exportData.filter(
+          (record) => getDisplayStatus(record) === "Expiring",
+        );
+      } else if (selectedStatus === "Expired") {
+        exportData = exportData.filter(
+          (record) => getDisplayStatus(record) === "Expired",
+        );
+      } else if (selectedStatus === "Draft") {
+        exportData = exportData.filter(
+          (record) => getDisplayStatus(record) === "Draft",
+        );
+      } else if (selectedStatus === "With Docs") {
+        exportData = exportData.filter(
+          (record) => record.documentAvailability === "Available",
+        );
+      }
+
+      const workbook = generateWorkbook(exportData);
+      const filename = `emou-records-${new Date().toISOString().split("T")[0]}.xlsx`;
+      XLSX.writeFile(workbook, filename);
+
+      setAlert({ message: "Excel export completed!", type: "success" });
     } catch (error) {
       console.error("Export failed:", error);
       setAlert({ message: "Failed to export records", type: "error" });
     }
   };
 
-  const generateCSV = (data: EMoURecord[]) => {
-    const headers = [
-      "ID",
-      "Company Name",
-      "From Date",
-      "To Date",
-      "Status",
-      "Description",
-      "Placement Opportunities",
-      "Internship Opportunities",
-      "Events Organised",
-      "IEEE Society",
-      "IEEE Community",
-      "EMoU Outcome",
-      "Domain",
-      "Created By",
-      "Created At",
-    ];
+  const generateWorkbook = (data: EMoURecord[]) => {
+    const rows = data.map((r) => ({
+      ID: r.id,
+      "Company Name": r.companyName,
+      Department: r.department,
+      Scope: r.scope || "",
+      "Maintained By": r.maintainedBy || "",
+      "From Date": r.fromDate,
+      "To Date": r.toDate,
+      "Display Status": getDisplayStatus(r),
+      Description: r.description,
+      "About Company": r.aboutCompany || "",
+      "Company Address": r.companyAddress || "",
+      "Company Website": r.companyWebsite || "",
+      Relationship: r.companyRelationship || 3,
+      "Events Organised": r.eventsOrganised || 0,
+      "Industry Contact": r.industryContactName || "",
+      "Industry Mobile": r.industryContactMobile || "",
+      "Industry Email": r.industryContactEmail || "",
+      "Institution Contact": r.institutionContactName || "",
+      "Institution Mobile": r.institutionContactMobile || "",
+      "Institution Email": r.institutionContactEmail || "",
+      "Clubs Aligned": r.clubsAligned || "",
+      "SDG Goals": r.sdgGoals || "",
+      "Skills/Technologies": r.skillsTechnologies || "",
+      "Per Student Cost": r.perStudentCost || 0,
+      Placement: r.placementOpportunity || 0,
+      Internship: r.internshipOpportunity || 0,
+      Renewal: r.goingForRenewal || "No",
+      "Benefits Achieved": r.benefitsAchieved || "",
+      "IEEE Society": r.ieeeSociety || "",
+      "IEEE Community": r.ieeeCommunity || "",
+      "EMoU Outcome": r.emouOutcome || "",
+      Domain: r.domain || "",
+      "Doc Availability": r.documentAvailability || "",
+      "HO Approval Doc": r.hodApprovalDoc || "",
+      "Signed Agreement Doc": r.signedAgreementDoc || "",
+      "Created By": r.createdByName,
+      "Created At": r.createdAt.toLocaleDateString(),
+      "Updated By": r.updatedByName || "",
+      "Updated At": r.updatedAt ? r.updatedAt.toLocaleDateString() : "",
+    }));
 
-    const rows = data.map((r) => [
-      r.id,
-      r.companyName,
-      r.fromDate,
-      r.toDate,
-      r.status,
-      r.description,
-      r.placementOpportunity || 0,
-      r.internshipOpportunity || 0,
-      r.eventsOrganised || 0,
-      r.ieeeSociety || "",
-      `"${(r.ieeeCommunity || "").replace(/"/g, '""')}"`,
-      `"${(r.emouOutcome || "").replace(/"/g, '""')}"`,
-      r.domain || "",
-      r.createdByName,
-      r.createdAt.toLocaleDateString(),
-    ]);
-
-    return [headers, ...rows].map((row) => row.join(",")).join("\n");
-  };
-
-  const downloadCSV = (csv: string, filename: string) => {
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    window.URL.revokeObjectURL(url);
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "eMoUs");
+    return workbook;
   };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {

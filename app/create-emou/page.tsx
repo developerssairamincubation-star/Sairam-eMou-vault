@@ -22,22 +22,22 @@ export default function CreateEMoUPage() {
     // Prevent duplicate record creation
     if (isCreatingRef.current) return;
     isCreatingRef.current = true;
-    if (!user) {
-      console.error("No user available");
-      setAlert({ message: "Please log in to create records", type: "error" });
-      return;
-    }
-
-    if (!user.uid) {
-      console.error("User object missing uid:", user);
-      setAlert({
-        message: "User session is invalid. Please log out and log back in.",
-        type: "error",
-      });
-      return;
-    }
-
     try {
+      if (!user) {
+        console.error("No user available");
+        setAlert({ message: "Please log in to create records", type: "error" });
+        return;
+      }
+
+      if (!user.uid) {
+        console.error("User object missing uid:", user);
+        setAlert({
+          message: "User session is invalid. Please log out and log back in.",
+          type: "error",
+        });
+        return;
+      }
+
       const now = new Date();
       const recordData = {
         ...data,
@@ -68,6 +68,7 @@ export default function CreateEMoUPage() {
         message: "Failed to create record. Check console for details.",
         type: "error",
       });
+    } finally {
       isCreatingRef.current = false;
     }
   };

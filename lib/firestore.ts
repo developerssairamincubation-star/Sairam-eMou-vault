@@ -15,6 +15,7 @@ import {
   startAfter,
   getCountFromServer,
   DocumentSnapshot,
+  runTransaction,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { EMoURecord, User, DepartmentCode, FilterOptions } from '@/types';
@@ -80,15 +81,22 @@ export async function generateEMoUId(department: DepartmentCode, fromDate?: stri
   const deptCode = getShortDeptCode(department);
   const counterId = `${year}_${deptCode}`;
   const counterRef = doc(db, COUNTERS_COLLECTION, counterId);
-  
-  const counterDoc = await getDoc(counterRef);
-  let nextNumber = 1;
-  
-  if (counterDoc.exists()) {
-    nextNumber = (counterDoc.data().count || 0) + 1;
-  }
-  
-  await setDoc(counterRef, { count: nextNumber, year, department: deptCode });
+
+  const nextNumber = await runTransaction(db, async (transaction) => {
+    const counterDoc = await transaction.get(counterRef);
+    const currentCount = counterDoc.exists()
+      ? (counterDoc.data().count as number) || 0
+      : 0;
+    const newCount = currentCount + 1;
+
+    transaction.set(
+      counterRef,
+      { count: newCount, year, department: deptCode },
+      { merge: true },
+    );
+
+    return newCount;
+  });
   
   const sequentialNumber = nextNumber.toString().padStart(3, '0');
   return `${year}SEC${deptCode}${sequentialNumber}`;
