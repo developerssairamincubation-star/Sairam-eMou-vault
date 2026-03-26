@@ -863,7 +863,28 @@ export default function EMoUForm({
               <label className="block text-xs font-medium text-[#4b5563] mb-1">
                 To Date <span className="text-red-500">*</span>
               </label>
-              <div className="flex items-center gap-2 mb-2">
+              
+              {!isPerpetual ? (
+                <input
+                  type="date"
+                  value={toInputDate(formData.toDate)}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      toDate: toDisplayDate(e.target.value),
+                    })
+                  }
+                  required
+                  min={toInputDate(formData.fromDate) || undefined}
+                  className="w-full"
+                />
+              ) : (
+                <div className="w-full px-3 py-2 border border-[#d1d5db] rounded-md bg-gray-100 text-sm text-[#6b7280]">
+                  Perpetual / Indefinite
+                </div>
+              )}
+              
+              <div className="flex items-center gap-2 mt-2">
                 <input
                   type="checkbox"
                   id="perpetual"
@@ -892,25 +913,6 @@ export default function EMoUForm({
                   Perpetual / Indefinite
                 </label>
               </div>
-              {!isPerpetual ? (
-                <input
-                  type="date"
-                  value={toInputDate(formData.toDate)}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      toDate: toDisplayDate(e.target.value),
-                    })
-                  }
-                  required
-                  min={toInputDate(formData.fromDate) || undefined}
-                  className="w-full"
-                />
-              ) : (
-                <div className="w-full px-3 py-2 border border-[#d1d5db] rounded-md bg-gray-100 text-sm text-[#6b7280]">
-                  Perpetual / Indefinite
-                </div>
-              )}
               {formData.toDate && !isPerpetual && (
                 <p className="text-xs text-[#6b7280] mt-1">{formData.toDate}</p>
               )}

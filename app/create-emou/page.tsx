@@ -58,10 +58,9 @@ export default function CreateEMoUPage() {
       // Clear localStorage after successful creation
       localStorage.removeItem("emou_form_draft");
 
-      // Navigate back to main page after a short delay
-      setTimeout(() => {
-        router.push("/");
-      }, 1500);
+      // Keep submission locked until redirect is triggered
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      router.push("/");
     } catch (error) {
       console.error("Failed to create record:", error);
       setAlert({
