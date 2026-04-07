@@ -44,6 +44,7 @@ const DEPARTMENTS: DepartmentCode[] = [
   "IOT",
   "EICE",
   "CSE MTECH",
+  "MECH AND AUTO",
   "Institution",
   "Incubation",
 ];

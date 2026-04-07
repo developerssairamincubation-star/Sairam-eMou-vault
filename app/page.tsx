@@ -169,6 +169,7 @@ function HomePage() {
     "IOT",
     "EICE",
     "CSE MTECH",
+    "MECH AND AUTO",
     "Incubation",
     "Institution",
   ];

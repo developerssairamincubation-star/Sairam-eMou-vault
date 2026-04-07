@@ -49,6 +49,7 @@ const ALL_DEPARTMENTS = [
   "IOT",
   "EICE",
   "CSE MTECH",
+  "MECH AND AUTO",
   "Institution",
   "Incubation",
 ];

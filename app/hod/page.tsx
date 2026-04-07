@@ -141,6 +141,7 @@ function HODPage() {
     "IOT",
     "EICE",
     "CSE MTECH",
+    "MECH AND AUTO",
     "Incubation",
     "Institution",
   ];
