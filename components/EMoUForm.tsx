@@ -76,6 +76,7 @@ const getShortDeptCode = (department: DepartmentCode): string => {
     "CSE MTECH": "CJ",
     Institution: "IN",
     Incubation: "IB",
+    "MECH AND AUTO": "MA",
   };
   return deptCodeMap[department] || department.slice(0, 2);
 };
