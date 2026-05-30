@@ -55,6 +55,7 @@ function getShortDeptCode(department: DepartmentCode): string {
     'IOT': 'CI',
     'EICE': 'IX',
     'CSE MTECH': 'CJ',
+    'MECH AND AUTO': 'MA',
     'Institution': 'IN',
     'Incubation': 'IB',
   };
