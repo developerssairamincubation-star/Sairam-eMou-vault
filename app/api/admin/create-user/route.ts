@@ -32,37 +32,21 @@ const transporter = nodemailer.createTransport({
 const adminAuth = getAuth();
 const adminDb = getFirestore();
 
-// Generate strong password with prefix pattern
+// Generate password with fixed pattern
 function generateStrongPassword(role: string, department?: string): string {
   const currentYear = new Date().getFullYear();
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-  const specialChars = "!@#$%&*";
-  
-  // Generate random suffix (8 chars + 2 special chars)
-  let randomPart = "";
-  for (let i = 0; i < 8; i++) {
-    randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  for (let i = 0; i < 2; i++) {
-    randomPart += specialChars.charAt(Math.floor(Math.random() * specialChars.length));
-  }
-  
-  // Shuffle the random part
-  randomPart = randomPart.split('').sort(() => Math.random() - 0.5).join('');
-  
-  // Create password with prefix pattern
-  let prefix = "";
+
   if (role === "hod" && department) {
-    prefix = `${department}${currentYear}`;
-  } else if (role === "master") {
-    prefix = `Master${currentYear}`;
-  } else if (role === "admin") {
-    prefix = `Admin${currentYear}`;
-  } else {
-    prefix = `User${currentYear}`;
+    return `${department}${currentYear}@123`;
   }
-  
-  return `${prefix}${randomPart}`;
+  if (role === "master") {
+    return `master${currentYear}@123`;
+  }
+  if (role === "admin") {
+    return `admin${currentYear}@123`;
+  }
+
+  return `user${currentYear}@123`;
 }
 
 // Parse notify emails from env
