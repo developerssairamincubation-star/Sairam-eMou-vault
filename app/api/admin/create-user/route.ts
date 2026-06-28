@@ -32,21 +32,10 @@ const transporter = nodemailer.createTransport({
 const adminAuth = getAuth();
 const adminDb = getFirestore();
 
-// Generate password with fixed pattern
-function generateStrongPassword(role: string, department?: string): string {
-  const currentYear = new Date().getFullYear();
-
-  if (role === "hod" && department) {
-    return `${department}${currentYear}@123`;
-  }
-  if (role === "master") {
-    return `master${currentYear}@123`;
-  }
-  if (role === "admin") {
-    return `admin${currentYear}@123`;
-  }
-
-  return `user${currentYear}@123`;
+// Generate password for first-time account creation
+// Same fixed password for all roles (admin, master, hod) - user should change it after first login
+function generateStrongPassword(): string {
+  return "Welcome@123";
 }
 
 // Parse notify emails from env
@@ -286,8 +275,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate strong password with prefix
-    const password = generateStrongPassword(role, department);
+    // Generate default first-time password
+    const password = generateStrongPassword();
 
     // Create user with Firebase Admin
     const userRecord = await adminAuth.createUser({

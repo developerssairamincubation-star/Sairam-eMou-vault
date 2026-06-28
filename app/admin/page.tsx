@@ -83,6 +83,17 @@ function AdminPage() {
   } | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [passwordModalUser, setPasswordModalUser] = useState<User | null>(
+    null,
+  );
+  const [passwordInput, setPasswordInput] = useState("");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordResult, setPasswordResult] = useState<{
+    email: string;
+    password: string;
+    emailSent: boolean;
+  } | null>(null);
+  const [passwordCopied, setPasswordCopied] = useState(false);
   const [editingCell, setEditingCell] = useState<{
     recordId: string;
     field: string;
@@ -852,6 +863,73 @@ function AdminPage() {
         }
       },
     });
+  };
+
+  const openPasswordModal = (user: User) => {
+    setPasswordInput("");
+    setPasswordModalUser(user);
+  };
+
+  const closePasswordModal = () => {
+    setPasswordModalUser(null);
+    setPasswordInput("");
+  };
+
+  const handleChangePassword = async () => {
+    if (!passwordModalUser) return;
+
+    if (passwordInput && passwordInput.length < 8) {
+      setAlert({
+        message: "Password must be at least 8 characters long",
+        type: "error",
+      });
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const currentAuthUser = auth.currentUser;
+      if (!currentAuthUser) {
+        throw new Error("Not authenticated");
+      }
+
+      const idToken = await currentAuthUser.getIdToken();
+
+      const response = await fetch("/api/admin/change-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          uid: passwordModalUser.uid,
+          newPassword: passwordInput || undefined,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to change password");
+      }
+
+      setPasswordCopied(false);
+      setPasswordResult({
+        email: passwordModalUser.email,
+        password: data.password,
+        emailSent: data.emailSent,
+      });
+      closePasswordModal();
+    } catch (error) {
+      const err = error as Error;
+      console.error("Failed to change password:", err);
+      setAlert({
+        message: `Failed to change password: ${err.message}`,
+        type: "error",
+      });
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   const getRoleBadgeColor = (role: UserRole) => {
@@ -2454,6 +2532,101 @@ function AdminPage() {
         />
       )}
 
+      {passwordModalUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-[#1f2937] mb-2">
+                Change Password
+              </h3>
+              <p className="text-sm text-[#6b7280] mb-4">
+                Set a new password for{" "}
+                <strong>
+                  {passwordModalUser.displayName || passwordModalUser.email}
+                </strong>{" "}
+                ({passwordModalUser.email}). Leave the field blank to
+                auto-generate a strong password.
+              </p>
+              <label className="block text-xs font-medium text-[#4b5563] mb-1">
+                New Password (optional)
+              </label>
+              <input
+                type="text"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                placeholder="Leave blank to auto-generate"
+                className="w-full px-3 py-2 text-sm border border-[#d1d5db] rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+                autoFocus
+              />
+              <p className="text-xs text-[#9ca3af] mt-1">
+                Minimum 8 characters if specified.
+              </p>
+            </div>
+            <div className="bg-[#f8f9fa] px-6 py-4 flex justify-end gap-3 rounded-b-lg">
+              <button
+                onClick={closePasswordModal}
+                disabled={isChangingPassword}
+                className="px-4 py-2 text-sm font-medium text-[#4b5563] bg-white border border-[#d1d5db] rounded hover:bg-[#f3f4f6] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleChangePassword}
+                disabled={isChangingPassword}
+                className="px-4 py-2 text-sm font-medium rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-60"
+              >
+                {isChangingPassword ? "Changing…" : "Change Password"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {passwordResult && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-[#1f2937] mb-2">
+                Password Changed
+              </h3>
+              <p className="text-sm text-[#6b7280] mb-4">
+                New password for <strong>{passwordResult.email}</strong>:
+              </p>
+              <div className="flex items-center gap-2 bg-[#f8f9fa] border border-[#d1d5db] rounded px-3 py-2 mb-3">
+                <code className="text-sm font-mono flex-1 break-all">
+                  {passwordResult.password}
+                </code>
+                <button
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(
+                      passwordResult.password,
+                    );
+                    setPasswordCopied(true);
+                  }}
+                  className="text-xs text-blue-600 hover:text-blue-800 flex-shrink-0"
+                >
+                  {passwordCopied ? "Copied!" : "Copy"}
+                </button>
+              </div>
+              {!passwordResult.emailSent && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                  Email notification could not be sent. Please share this
+                  password with the user manually.
+                </p>
+              )}
+            </div>
+            <div className="bg-[#f8f9fa] px-6 py-4 flex justify-end gap-3 rounded-b-lg">
+              <button
+                onClick={() => setPasswordResult(null)}
+                className="px-4 py-2 text-sm font-medium rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="min-h-screen bg-[#f8f9fa]">
         {/* Header */}
         <header className="bg-white border-b border-[#d1d5db] sticky top-0 z-20">
@@ -2949,7 +3122,7 @@ function AdminPage() {
                         <th style={{ width: "120px" }}>Role</th>
                         <th style={{ width: "120px" }}>Department</th>
                         <th style={{ width: "150px" }}>Created At</th>
-                        <th style={{ width: "100px" }}>Actions</th>
+                        <th style={{ width: "180px" }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2985,21 +3158,30 @@ function AdminPage() {
                               {user.createdAt.toLocaleDateString()}
                             </td>
                             <td>
-                              {user.uid !== currentUser?.uid &&
-                                (deletingUserId === user.uid ? (
-                                  <div className="flex items-center gap-1 text-xs text-red-500">
-                                    <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-red-300 border-t-red-600"></div>
-                                    <span>Deleting…</span>
-                                  </div>
-                                ) : (
-                                  <button
-                                    onClick={() => handleDeleteUser(user.uid)}
-                                    className="text-xs text-red-600 hover:text-red-800"
-                                    disabled={deletingUserId !== null}
-                                  >
-                                    Delete
-                                  </button>
-                                ))}
+                              <div className="flex items-center gap-3">
+                                <button
+                                  onClick={() => openPasswordModal(user)}
+                                  className="text-xs text-blue-600 hover:text-blue-800"
+                                  disabled={deletingUserId !== null}
+                                >
+                                  Change Password
+                                </button>
+                                {user.uid !== currentUser?.uid &&
+                                  (deletingUserId === user.uid ? (
+                                    <div className="flex items-center gap-1 text-xs text-red-500">
+                                      <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-red-300 border-t-red-600"></div>
+                                      <span>Deleting…</span>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleDeleteUser(user.uid)}
+                                      className="text-xs text-red-600 hover:text-red-800"
+                                      disabled={deletingUserId !== null}
+                                    >
+                                      Delete
+                                    </button>
+                                  ))}
+                              </div>
                             </td>
                           </tr>
                         ))
