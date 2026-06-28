@@ -47,6 +47,8 @@ const DEPARTMENTS: DepartmentCode[] = [
   "MECH AND AUTO",
   "Institution",
   "Incubation",
+  "Mathematics",
+  "MBA",
 ];
 const STATUSES: EMoUStatus[] = [
   "Active",
@@ -77,6 +79,8 @@ const getShortDeptCode = (department: DepartmentCode): string => {
     Institution: "IN",
     Incubation: "IB",
     "MECH AND AUTO": "MA",
+    Mathematics: "MS",
+    MBA: "MB",
   };
   return deptCodeMap[department] || department.slice(0, 2);
 };

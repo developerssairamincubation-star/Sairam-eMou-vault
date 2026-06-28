@@ -58,6 +58,8 @@ function getShortDeptCode(department: DepartmentCode): string {
     'MECH AND AUTO': 'MA',
     'Institution': 'IN',
     'Incubation': 'IB',
+    'Mathematics': 'MS',
+    'MBA': 'MB',
   };
   return deptCodeMap[department] || department.slice(0, 2);
 }

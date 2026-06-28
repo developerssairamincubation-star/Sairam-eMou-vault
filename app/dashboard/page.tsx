@@ -52,6 +52,8 @@ const ALL_DEPARTMENTS = [
   "MECH AND AUTO",
   "Institution",
   "Incubation",
+  "Mathematics",
+  "MBA",
 ];
 
 // Colors for departments
