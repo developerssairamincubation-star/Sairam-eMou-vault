@@ -54,6 +54,8 @@ const ALL_DEPARTMENTS = [
   "Incubation",
   "Mathematics",
   "MBA",
+  "UBA",
+  "Innovation Ecosystem",
 ];
 
 // Colors for departments

@@ -13,7 +13,7 @@ export interface User {
 }
 
 // Department codes
-export type DepartmentCode = 'CSE' | 'ECE' | 'MECH' | 'CIVIL' | 'EEE' | 'IT' | 'AIDS' | 'CSBS' | 'E&I' | 'MECHATRONICS' | 'CCE' | 'AIML' | 'CYBERSECURITY' | 'IOT' | 'EICE' | 'CSE MTECH'| 'MECH AND AUTO' | 'Institution' | 'Incubation' | 'Mathematics' | 'MBA';
+export type DepartmentCode = 'CSE' | 'ECE' | 'MECH' | 'CIVIL' | 'EEE' | 'IT' | 'AIDS' | 'CSBS' | 'E&I' | 'MECHATRONICS' | 'CCE' | 'AIML' | 'CYBERSECURITY' | 'IOT' | 'EICE' | 'CSE MTECH'| 'MECH AND AUTO' | 'Institution' | 'Incubation' | 'Mathematics' | 'MBA' | 'UBA' | 'Innovation Ecosystem';
 
 // eMoU Status
 export type EMoUStatus = 'Active' | 'Expired' | 'Renewal Pending' | 'Draft';

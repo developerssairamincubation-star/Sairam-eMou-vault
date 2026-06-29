@@ -60,6 +60,8 @@ function getShortDeptCode(department: DepartmentCode): string {
     'Incubation': 'IB',
     'Mathematics': 'MS',
     'MBA': 'MB',
+    'UBA': 'UB',
+    'Innovation Ecosystem': 'IE',
   };
   return deptCodeMap[department] || department.slice(0, 2);
 }
